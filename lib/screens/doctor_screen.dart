@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -237,7 +238,7 @@ bool _starting = false;
     super.dispose();
   }
 
-  Widget _currentCard() {
+ Widget _currentCard() {
     if (turnoActual == null) {
       return Container(
         width: double.infinity,
@@ -298,15 +299,38 @@ bool _starting = false;
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  nombre.isEmpty ? "Sin nombre" : nombre,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                
+                // --- AQUÍ ESTÁ EL CAMBIO ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        nombre.isEmpty ? "Sin nombre" : nombre,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Botón grande para copiar
+                    IconButton(
+                      icon: const Icon(Icons.copy_all_rounded, color: Colors.white),
+                      iconSize: 32, // Tamaño aumentado para que sea "grande" y fácil de tocar
+                      tooltip: "Copiar Nombre",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(), // Reduce el padding extra para ajustar mejor
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: nombre));
+                        _toast("Nombre copiado al portapapeles");
+                      },
+                    ),
+                    const SizedBox(width: 8), // Un pequeño espacio extra
+                  ],
                 ),
+                // ---------------------------
+
                 const SizedBox(height: 6),
                 Text(
                   "Edad: $edad  •  Tel: $tel",
@@ -331,6 +355,22 @@ bool _starting = false;
       ),
     );
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   @override
   Widget build(BuildContext context) {

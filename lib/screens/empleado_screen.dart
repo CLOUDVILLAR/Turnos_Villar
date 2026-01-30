@@ -26,6 +26,26 @@ Future<List<Map<String, dynamic>>> _buscarClientes(String q) async {
   return [];
 }
 
+
+String? normalizePhone(String? input) {
+  if (input == null) return null;
+  final t = input.trim();
+  if (t.isEmpty) return null;
+
+  final hasPlus = t.startsWith('+');
+  final digits = t.replaceAll(RegExp(r'\D+'), ''); // deja solo dígitos
+
+  if (digits.isEmpty) return null;
+
+  // Para DB puedes guardar solo dígitos (recomendado)
+  // return digits;
+
+  // Si quieres conservar el + cuando lo escriben:
+  return hasPlus ? '+$digits' : digits;
+}
+
+
+
 class EmpleadoScreen extends StatefulWidget {
   final int sucursalId;
   final String sucursalNombre;
@@ -121,38 +141,44 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     } catch (_) {}
   }
 
-  Future<void> _crearTurno(String nombre, int edad, String? tel) async {
-    final cleanName = nombre.trim();
-    if (cleanName.isEmpty) {
-      _toast("El nombre es obligatorio.");
-      return;
-    }
-    if (RegExp(r'\d').hasMatch(cleanName)) {
-      _toast("El nombre no puede contener números.");
-      return;
-    }
-    if (edad <= 0 || edad > 120) {
-      _toast("Edad inválida.");
-      return;
-    }
-    if (tel != null && tel.isNotEmpty && !RegExp(r'^\d+$').hasMatch(tel)) {
-      _toast("El teléfono solo puede contener números.");
-      return;
-    }
-
-    await http.post(
-      Uri.parse('$baseUrl/crear-turno'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'sucursal_id': widget.sucursalId,
-        'nombre': cleanName,
-        'edad': edad,
-        'telefono': tel,
-      }),
-    );
-
-    await _fetchTurnosEspera();
+ Future<void> _crearTurno(String nombre, int edad, String? tel) async {
+  final cleanName = nombre.trim();
+  if (cleanName.isEmpty) {
+    _toast("El nombre es obligatorio.");
+    return;
   }
+  if (RegExp(r'\d').hasMatch(cleanName)) {
+    _toast("El nombre no puede contener números.");
+    return;
+  }
+  if (edad <= 0 || edad > 120) {
+    _toast("Edad inválida.");
+    return;
+  }
+
+  // ✅ Normaliza teléfono (acepta +, guiones, espacios, paréntesis)
+  final telNormalized = normalizePhone(tel);
+
+  // ✅ Si el usuario escribió algo pero no quedó ningún dígito válido
+  if (tel != null && tel.trim().isNotEmpty && telNormalized == null) {
+    _toast("Teléfono inválido.");
+    return;
+  }
+
+  await http.post(
+    Uri.parse('$baseUrl/crear-turno'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'sucursal_id': widget.sucursalId,
+      'nombre': cleanName,
+      'edad': edad,
+      'telefono': telNormalized, // ✅ manda limpio
+    }),
+  );
+
+  await _fetchTurnosEspera();
+}
+
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -793,7 +819,7 @@ return StatefulBuilder(
                     ),
                     const SizedBox(height: 12),
 
-                    TextField(
+                  TextField(
   controller: telCtrl,
   focusNode: telFocus,
 
@@ -804,11 +830,17 @@ return StatefulBuilder(
   readOnly: (selectedCliente != null) && !editingTel,
 
   showCursor: (selectedCliente == null) || editingTel,
+
+  // ✅ solo una vez
   keyboardType: TextInputType.phone,
+
+  // ✅ permite +, guiones, espacios, paréntesis y números
+  // ❌ NO uses digitsOnly porque bloquea + y -
   inputFormatters: [
-    FilteringTextInputFormatter.digitsOnly,
-    LengthLimitingTextInputFormatter(15),
+    FilteringTextInputFormatter.allow(RegExp(r'[\d\+\-\s\(\)]')),
+    LengthLimitingTextInputFormatter(20), // por si meten +1 (xxx) xxx-xxxx
   ],
+
   decoration: InputDecoration(
     labelText: "Teléfono (opcional)",
     focusedBorder: OutlineInputBorder(
@@ -820,19 +852,20 @@ return StatefulBuilder(
       borderSide: const BorderSide(color: Colors.black12),
     ),
     suffixIcon: (selectedCliente != null)
-    ? IconButton(
-        tooltip: editingTel ? "Bloquear edición" : "Editar teléfono",
-        icon: Icon(editingTel ? Icons.edit_off : Icons.edit, color: brandRed),
-        onPressed: () {
-          setLocal(() => editingTel = !editingTel);
-          if (editingTel) {
-            Future.microtask(() => telFocus.requestFocus());
-          }
-        },
-      )
-    : null,
+        ? IconButton(
+            tooltip: editingTel ? "Bloquear edición" : "Editar teléfono",
+            icon: Icon(editingTel ? Icons.edit_off : Icons.edit, color: brandRed),
+            onPressed: () {
+              setLocal(() => editingTel = !editingTel);
+              if (editingTel) {
+                Future.microtask(() => telFocus.requestFocus());
+              }
+            },
+          )
+        : null,
   ),
 )
+
 ,
                   ],
                 ),
@@ -867,7 +900,7 @@ return StatefulBuilder(
                       onPressed: () async {
                         final nombre = nombreCtrl.text.trim();
                         final edad = int.tryParse(edadCtrl.text.trim()) ?? 0;
-                        final tel = telCtrl.text.trim().isEmpty ? null : telCtrl.text.trim();
+                        final tel = normalizePhone(telCtrl.text);
 
                         if (nombre.isEmpty) {
                           _toast("El nombre es obligatorio");
@@ -881,16 +914,29 @@ return StatefulBuilder(
 
                         // ✅ Crear en Odoo solo si NO seleccionó existente
                         if (selectedCliente == null) {
-                          await http.post(
-                            Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
-                            headers: {'Content-Type': 'application/json'},
-                            body: jsonEncode({
-                              "nombre": nombre,
-                              "edad": edad,
-                              "telefono": tel,
-                            }),
-                          );
-                        }
+  final telClean = tel?.trim();
+  final res = await http.post(
+    Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      "nombre": nombre.trim(),
+      "edad": edad,
+      "telefono": (telClean == null || telClean.isEmpty) ? null : telClean,
+    }),
+  );
+
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    _toast("Error Odoo (${res.statusCode}): ${res.body}");
+    return;
+  }
+
+  final data = jsonDecode(res.body) as Map<String, dynamic>;
+  final created = data["created"] == true;
+
+  selectedCliente = (data["partner"] as Map).cast<String, dynamic>();
+
+  _toast(created ? "Cliente creado ✅" : "Cliente ya existía ♻️");
+}
 
                         // ✅ Si seleccionó y cambió el tel, actualiza en Odoo
                         if (selectedCliente != null) {

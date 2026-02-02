@@ -10,7 +10,180 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../utils/ip.dart';
 import '../widgets/custom_drawer.dart';
 
+/// =======================
+///  Dialogs (GLOBAL)
+///  (Reciben BuildContext para no depender de variables del State)
+/// =======================
 
+void _showManualCopyDialog(
+  BuildContext context, {
+  required String nombre,
+  required String telefono,
+}) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text(
+        "Copiar datos",
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Selecciona el texto y cópialo con Ctrl+C (o clic derecho → Copiar).",
+            style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          const Text("Nombre", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              nombre,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text("Teléfono", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefono,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cerrar"),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<bool> _showTelefonoYaAsignadoDialog(
+  BuildContext context, {
+  required String telefono,
+  required String nombreExistente,
+  required Color brandRed,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text(
+        "Teléfono ya registrado",
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Este número de teléfono ya está asignado al cliente:",
+            style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 10),
+
+          // Nombre en negrita + seleccionable
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              nombreExistente,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Teléfono seleccionable
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefono,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          TextButton.icon(
+            onPressed: () {
+              _showManualCopyDialog(context, nombre: nombreExistente, telefono: telefono);
+            },
+            icon: Icon(Icons.copy_all_rounded, color: brandRed),
+            label: Text(
+              "Copiar manualmente",
+              style: TextStyle(fontWeight: FontWeight.w900, color: brandRed),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          style: TextButton.styleFrom(foregroundColor: Colors.black54),
+          child: const Text("Cancelar"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: brandRed,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text(
+            "Usar cliente existente",
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return result ?? false;
+}
+
+/// =======================
+///  Helpers (GLOBAL)
+/// =======================
 
 Future<List<Map<String, dynamic>>> _buscarClientes(String q) async {
   if (q.trim().length < 2) return [];
@@ -26,25 +199,22 @@ Future<List<Map<String, dynamic>>> _buscarClientes(String q) async {
   return [];
 }
 
-
 String? normalizePhone(String? input) {
   if (input == null) return null;
   final t = input.trim();
   if (t.isEmpty) return null;
 
   final hasPlus = t.startsWith('+');
-  final digits = t.replaceAll(RegExp(r'\D+'), ''); // deja solo dígitos
+  final digits = t.replaceAll(RegExp(r'\D+'), '');
 
   if (digits.isEmpty) return null;
 
-  // Para DB puedes guardar solo dígitos (recomendado)
-  // return digits;
-
-  // Si quieres conservar el + cuando lo escriben:
   return hasPlus ? '+$digits' : digits;
 }
 
-
+/// =======================
+///  Screen
+/// =======================
 
 class EmpleadoScreen extends StatefulWidget {
   final int sucursalId;
@@ -62,18 +232,17 @@ class EmpleadoScreen extends StatefulWidget {
 
 class _QueueItem {
   final Map<String, dynamic> turno;
-  final int pos; // 1 = siguiente, 2 = después...
+  final int pos;
   const _QueueItem(this.turno, this.pos);
 }
 
 class _EmpleadoScreenState extends State<EmpleadoScreen> {
-  // Brand
   static const Color brandRed = Color(0xFFE5361B);
 
   WebSocketChannel? channel;
 
   Map<String, dynamic>? turnoActual;
-  List<Map<String, dynamic>> cola = []; // turnos después del actual
+  List<Map<String, dynamic>> cola = [];
 
   Timer? _pingTimer;
   Timer? _reconnectTimer;
@@ -141,44 +310,41 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     } catch (_) {}
   }
 
- Future<void> _crearTurno(String nombre, int edad, String? tel) async {
-  final cleanName = nombre.trim();
-  if (cleanName.isEmpty) {
-    _toast("El nombre es obligatorio.");
-    return;
+  Future<void> _crearTurno(String nombre, int edad, String? tel) async {
+    final cleanName = nombre.trim();
+    if (cleanName.isEmpty) {
+      _toast("El nombre es obligatorio.");
+      return;
+    }
+    if (RegExp(r'\d').hasMatch(cleanName)) {
+      _toast("El nombre no puede contener números.");
+      return;
+    }
+    if (edad <= 0 || edad > 120) {
+      _toast("Edad inválida.");
+      return;
+    }
+
+    final telNormalized = normalizePhone(tel);
+
+    if (tel != null && tel.trim().isNotEmpty && telNormalized == null) {
+      _toast("Teléfono inválido.");
+      return;
+    }
+
+    await http.post(
+      Uri.parse('$baseUrl/crear-turno'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'sucursal_id': widget.sucursalId,
+        'nombre': cleanName,
+        'edad': edad,
+        'telefono': telNormalized,
+      }),
+    );
+
+    await _fetchTurnosEspera();
   }
-  if (RegExp(r'\d').hasMatch(cleanName)) {
-    _toast("El nombre no puede contener números.");
-    return;
-  }
-  if (edad <= 0 || edad > 120) {
-    _toast("Edad inválida.");
-    return;
-  }
-
-  // ✅ Normaliza teléfono (acepta +, guiones, espacios, paréntesis)
-  final telNormalized = normalizePhone(tel);
-
-  // ✅ Si el usuario escribió algo pero no quedó ningún dígito válido
-  if (tel != null && tel.trim().isNotEmpty && telNormalized == null) {
-    _toast("Teléfono inválido.");
-    return;
-  }
-
-  await http.post(
-    Uri.parse('$baseUrl/crear-turno'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      'sucursal_id': widget.sucursalId,
-      'nombre': cleanName,
-      'edad': edad,
-      'telefono': telNormalized, // ✅ manda limpio
-    }),
-  );
-
-  await _fetchTurnosEspera();
-}
-
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -192,14 +358,14 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   }
 
   @override
-void dispose() {
-  _pingTimer?.cancel();
-  _reconnectTimer?.cancel();
-  try {
-    channel?.sink.close();
-  } catch (_) {}
-  super.dispose();
-}
+  void dispose() {
+    _pingTimer?.cancel();
+    _reconnectTimer?.cancel();
+    try {
+      channel?.sink.close();
+    } catch (_) {}
+    super.dispose();
+  }
 
   // ----------------- UI helpers -----------------
 
@@ -504,7 +670,6 @@ void dispose() {
     );
   }
 
-  // llenar hacia abajo y al tocar el fondo crear otra columna
   List<_QueueItem?> _columnMajor(List<_QueueItem> items, int rowsPerCol, int cols) {
     final totalCells = rowsPerCol * cols;
     final out = List<_QueueItem?>.filled(totalCells, null);
@@ -513,7 +678,7 @@ void dispose() {
       final r = j % rowsPerCol;
       final c = j ~/ rowsPerCol;
       if (c >= cols) break;
-      final i = r * cols + c; // row-major index
+      final i = r * cols + c;
       out[i] = items[j];
     }
     return out;
@@ -576,441 +741,420 @@ void dispose() {
     );
   }
 
-  // ----------------- Dialog Nuevo Turno (buscador Odoo estable) -----------------
+  // ----------------- Dialog Nuevo Turno -----------------
 
-void _showAddTurnoDialog() {
-  final nombreCtrl = TextEditingController();
-  final edadCtrl = TextEditingController();
-  final telCtrl = TextEditingController();
+  void _showAddTurnoDialog() {
+    final nombreCtrl = TextEditingController();
+    final edadCtrl = TextEditingController();
+    final telCtrl = TextEditingController();
 
-  Map<String, dynamic>? selectedCliente;
-  List<Map<String, dynamic>> sugerencias = [];
-  bool loadingSearch = false;
-
-  Timer? _localDebounce;
-  bool _dialogAlive = true;
-
-  void safeSetLocal(StateSetter setLocal, VoidCallback fn) {
-    if (!_dialogAlive) return;
-    setLocal(fn);
-  }
-
-  // Nombre: letras + espacios + acentos + guión + apóstrofe, sin números
-  final nameFormatter = FilteringTextInputFormatter.allow(
-    RegExp(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ\s\-\']"),
-  );
-
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) {
-      // ✅ DECLARA ESTO JUSTO ANTES DEL return StatefulBuilder(...)
-bool editingTel = false;
-bool savingTel = false;
-String originalTel = '';
-
-return StatefulBuilder(
-  builder: (context, setLocal) {
-    void onNombreChanged(String value) {
-      selectedCliente = null;
-
-      _localDebounce?.cancel();
-      _localDebounce = Timer(const Duration(milliseconds: 300), () async {
-        final q = value.trim();
-
-        if (q.length < 2) {
-          safeSetLocal(setLocal, () {
-            sugerencias = [];
-            loadingSearch = false;
-          });
-          return;
-        }
-
-        safeSetLocal(setLocal, () => loadingSearch = true);
-        final res = await _buscarClientes(q);
-
-        safeSetLocal(setLocal, () {
-          sugerencias = res;
-          loadingSearch = false;
-        });
-      });
-    }
-
-    void selectCliente(Map<String, dynamic> c) {
-      setLocal(() {
-        selectedCliente = c;
-        nombreCtrl.text = (c['name'] ?? '').toString();
-
-        final tel = ((c['phone'] ?? c['mobile']) ?? '').toString();
-        telCtrl.text = tel;
-
-        originalTel = tel;     // ✅
-        editingTel = false;    // ✅
-        savingTel = false;     // ✅
-
-        sugerencias = [];
-        loadingSearch = false;
-      });
-    }
-
-    void clearSelected() {
-      safeSetLocal(setLocal, () {
-        selectedCliente = null;
-        nombreCtrl.clear();
-        edadCtrl.clear();
-        telCtrl.clear();
-        sugerencias = [];
-        loadingSearch = false;
-
-        // ✅ reset
-        originalTel = '';
-        editingTel = false;
-        savingTel = false;
-      });
-    }
-
-    final screenW = MediaQuery.of(context).size.width;
-    final maxW = screenW > 560 ? 560.0 : screenW - 32;
+    // ✅ FocusNode creado una sola vez por diálogo
     final telFocus = FocusNode();
-    return Dialog(
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // --------- Header ----------
-              Row(
-                children: [
-                  const Icon(Icons.person_add_alt_1, color: brandRed),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      "Nuevo Cliente",
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                    ),
-                  ),
-                  if (selectedCliente != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: brandRed.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: brandRed.withOpacity(0.35)),
-                      ),
-                      child: const Text(
-                        "Cliente existente",
-                        style: TextStyle(
-                          color: brandRed,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
 
-              // --------- Form ----------
-              SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (selectedCliente != null)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: clearSelected,
-                          style: TextButton.styleFrom(foregroundColor: brandRed),
-                          icon: const Icon(Icons.close, size: 18),
-                          label: const Text("Quitar selección"),
-                        ),
-                      ),
+    Map<String, dynamic>? selectedCliente;
+    List<Map<String, dynamic>> sugerencias = [];
+    bool loadingSearch = false;
 
-                    TextField(
-                      controller: nombreCtrl,
-                      inputFormatters: [nameFormatter],
-                      enabled: selectedCliente == null,
-                      onChanged: onNombreChanged,
-                      decoration: InputDecoration(
-                        labelText: "Nombre y Apellido",
-                        suffixIcon: loadingSearch
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : (selectedCliente != null
-                                ? const Icon(Icons.check_circle, color: brandRed)
-                                : null),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: brandRed, width: 2),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Colors.black12),
-                        ),
-                      ),
-                    ),
+    Timer? _localDebounce;
+    bool _dialogAlive = true;
 
-                    // ✅ SUGERENCIAS con alto fijo (sin IntrinsicWidth crash)
-                    if (selectedCliente == null && sugerencias.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: SizedBox(
-                          height: 220,
-                          child: ListView.builder(
-                            padding: EdgeInsets.zero,
-                            itemCount: sugerencias.length,
-                            shrinkWrap: true,
-                            physics: const ClampingScrollPhysics(),
-                            itemBuilder: (_, i) {
-                              final c = sugerencias[i];
-                              final name = (c['name'] ?? '').toString();
-                              final sub = ((c['phone'] ?? c['mobile']) ?? '').toString();
-                              return ListTile(
-                                dense: true,
-                                title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                  sub.isEmpty ? "Sin teléfono" : sub,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () => selectCliente(c),
-                              );
-                            },
+    void safeSetLocal(StateSetter setLocal, VoidCallback fn) {
+      if (!_dialogAlive) return;
+      setLocal(fn);
+    }
+
+    final nameFormatter = FilteringTextInputFormatter.allow(
+      RegExp(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ\s\-\']"),
+    );
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        bool editingTel = false;
+        bool savingTel = false;
+        String originalTel = '';
+
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            void onNombreChanged(String value) {
+              selectedCliente = null;
+
+              _localDebounce?.cancel();
+              _localDebounce = Timer(const Duration(milliseconds: 300), () async {
+                final q = value.trim();
+
+                if (q.length < 2) {
+                  safeSetLocal(setLocal, () {
+                    sugerencias = [];
+                    loadingSearch = false;
+                  });
+                  return;
+                }
+
+                safeSetLocal(setLocal, () => loadingSearch = true);
+                final res = await _buscarClientes(q);
+
+                safeSetLocal(setLocal, () {
+                  sugerencias = res;
+                  loadingSearch = false;
+                });
+              });
+            }
+
+            void selectCliente(Map<String, dynamic> c) {
+              setLocal(() {
+                selectedCliente = c;
+                nombreCtrl.text = (c['name'] ?? '').toString();
+
+                final tel = ((c['phone'] ?? c['mobile']) ?? '').toString();
+                telCtrl.text = tel;
+
+                originalTel = tel;
+                editingTel = false;
+                savingTel = false;
+
+                sugerencias = [];
+                loadingSearch = false;
+              });
+            }
+
+            void clearSelected() {
+              safeSetLocal(setLocal, () {
+                selectedCliente = null;
+                nombreCtrl.clear();
+                edadCtrl.clear();
+                telCtrl.clear();
+                sugerencias = [];
+                loadingSearch = false;
+
+                originalTel = '';
+                editingTel = false;
+                savingTel = false;
+              });
+            }
+
+            final screenW = MediaQuery.of(context).size.width;
+            final maxW = screenW > 560 ? 560.0 : screenW - 32;
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxW),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person_add_alt_1, color: brandRed),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              "Nuevo Cliente",
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                            ),
                           ),
+                          if (selectedCliente != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: brandRed.withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: brandRed.withOpacity(0.35)),
+                              ),
+                              child: const Text(
+                                "Cliente existente",
+                                style: TextStyle(
+                                  color: brandRed,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (selectedCliente != null)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: clearSelected,
+                                  style: TextButton.styleFrom(foregroundColor: brandRed),
+                                  icon: const Icon(Icons.close, size: 18),
+                                  label: const Text("Quitar selección"),
+                                ),
+                              ),
+
+                            TextField(
+                              controller: nombreCtrl,
+                              inputFormatters: [nameFormatter],
+                              enabled: selectedCliente == null,
+                              onChanged: onNombreChanged,
+                              decoration: InputDecoration(
+                                labelText: "Nombre y Apellido",
+                                suffixIcon: loadingSearch
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      )
+                                    : (selectedCliente != null
+                                        ? const Icon(Icons.check_circle, color: brandRed)
+                                        : null),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: brandRed, width: 2),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                              ),
+                            ),
+
+                            if (selectedCliente == null && sugerencias.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(top: 8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.black12),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: SizedBox(
+                                  height: 220,
+                                  child: ListView.builder(
+                                    padding: EdgeInsets.zero,
+                                    itemCount: sugerencias.length,
+                                    shrinkWrap: true,
+                                    physics: const ClampingScrollPhysics(),
+                                    itemBuilder: (_, i) {
+                                      final c = sugerencias[i];
+                                      final name = (c['name'] ?? '').toString();
+                                      final sub = ((c['phone'] ?? c['mobile']) ?? '').toString();
+                                      return ListTile(
+                                        dense: true,
+                                        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        subtitle: Text(
+                                          sub.isEmpty ? "Sin teléfono" : sub,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        onTap: () => selectCliente(c),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+
+                            const SizedBox(height: 12),
+
+                            TextField(
+                              controller: edadCtrl,
+                              enabled: true,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(3),
+                              ],
+                              decoration: InputDecoration(
+                                labelText: "Edad",
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: brandRed, width: 2),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            TextField(
+                              controller: telCtrl,
+                              focusNode: telFocus,
+                              enabled: !savingTel,
+                              readOnly: (selectedCliente != null) && !editingTel,
+                              showCursor: (selectedCliente == null) || editingTel,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[\d\+\-\s\(\)]')),
+                                LengthLimitingTextInputFormatter(20),
+                              ],
+                              decoration: InputDecoration(
+                                labelText: "Teléfono (opcional)",
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: brandRed, width: 2),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                                suffixIcon: (selectedCliente != null)
+                                    ? IconButton(
+                                        tooltip: editingTel ? "Bloquear edición" : "Editar teléfono",
+                                        icon: Icon(editingTel ? Icons.edit_off : Icons.edit, color: brandRed),
+                                        onPressed: () {
+                                          setLocal(() => editingTel = !editingTel);
+                                          if (editingTel) {
+                                            Future.microtask(() => telFocus.requestFocus());
+                                          }
+                                        },
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 14),
 
-                    TextField(
-                      controller: edadCtrl,
-                      enabled: true, // ✅ siempre habilitada
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(3),
-                      ],
-                      decoration: InputDecoration(
-                        labelText: "Edad",
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: brandRed, width: 2),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Colors.black12),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () {
+                                _dialogAlive = false;
+                                _localDebounce?.cancel();
+                                Navigator.pop(context);
+                              },
+                              style: TextButton.styleFrom(foregroundColor: Colors.black54),
+                              child: const Text("Cancelar", style: TextStyle(fontWeight: FontWeight.w800)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: brandRed,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () async {
+                                final nombre = nombreCtrl.text.trim();
+                                final edad = int.tryParse(edadCtrl.text.trim()) ?? 0;
+                                final tel = normalizePhone(telCtrl.text);
+
+                                if (nombre.isEmpty) {
+                                  _toast("El nombre es obligatorio");
+                                  return;
+                                }
+
+                                if (edad <= 0 || edad > 120) {
+                                  _toast("Edad inválida.");
+                                  return;
+                                }
+
+                                // 1) Si NO seleccionó existente, intenta seleccionar/crear en Odoo
+                                if (selectedCliente == null) {
+                                  final telClean = tel?.trim();
+
+                                  final res = await http.post(
+                                    Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: jsonEncode({
+                                      "nombre": nombre.trim(),
+                                      "edad": edad,
+                                      "telefono": (telClean == null || telClean.isEmpty) ? null : telClean,
+                                    }),
+                                  );
+
+                                  if (res.statusCode < 200 || res.statusCode >= 300) {
+                                    _toast("Error Odoo (${res.statusCode}): ${res.body}");
+                                    return;
+                                  }
+
+                                  final data = jsonDecode(res.body) as Map<String, dynamic>;
+                                  final created = data["created"] == true;
+                                  final partner = (data["partner"] as Map).cast<String, dynamic>();
+
+                                  // Si no creó y hay teléfono, muestra ventana
+                                  if (!created && (telClean != null && telClean.isNotEmpty)) {
+                                    final existingName = (partner["name"] ?? "").toString();
+                                    final existingPhone =
+                                        ((partner["phone"] ?? partner["mobile"]) ?? telClean).toString();
+
+                                    final usarExistente = await _showTelefonoYaAsignadoDialog(
+                                      context,
+                                      telefono: existingPhone,
+                                      nombreExistente: existingName.isEmpty ? "Cliente" : existingName,
+                                      brandRed: brandRed,
+                                    );
+
+                                    if (!usarExistente) return;
+
+                                    selectedCliente = partner;
+                                    nombreCtrl.text = (partner["name"] ?? nombre).toString();
+                                    final pTel =
+                                        ((partner["phone"] ?? partner["mobile"]) ?? telClean).toString();
+                                    telCtrl.text = pTel;
+
+                                    originalTel = pTel;
+                                    editingTel = false;
+                                    savingTel = false;
+
+                                    _toast("Usando cliente existente ♻️");
+                                  } else {
+                                    selectedCliente = partner;
+                                    _toast(created ? "Cliente creado ✅" : "Cliente ya existía ♻️");
+                                  }
+                                }
+
+                                // 2) Si seleccionó existente y cambió teléfono, actualiza en Odoo (tu lógica original)
+                                if (selectedCliente != null) {
+                                  final newTel = telCtrl.text.trim();
+                                  if (newTel != originalTel) {
+                                    final partnerId = selectedCliente!['id'];
+                                    await http.post(
+                                      Uri.parse('$baseUrl/odoo/clientes/$partnerId/telefono'),
+                                      headers: {'Content-Type': 'application/json'},
+                                      body: jsonEncode({"telefono": newTel.isEmpty ? null : newTel}),
+                                    );
+                                  }
+                                }
+
+                                // 3) Crear turno en tu backend
+                                await _crearTurno(nombre, edad, tel);
+
+                                _dialogAlive = false;
+                                _localDebounce?.cancel();
+                                if (mounted) Navigator.pop(context);
+                              },
+                              child: const Text("Agregar", style: TextStyle(fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-
-                  TextField(
-  controller: telCtrl,
-  focusNode: telFocus,
-
-  // ✅ siempre habilitado para que el suffixIcon sea clickable
-  enabled: !savingTel,
-
-  // ✅ bloquea escritura si es cliente existente y aún no activaste el lápiz
-  readOnly: (selectedCliente != null) && !editingTel,
-
-  showCursor: (selectedCliente == null) || editingTel,
-
-  // ✅ solo una vez
-  keyboardType: TextInputType.phone,
-
-  // ✅ permite +, guiones, espacios, paréntesis y números
-  // ❌ NO uses digitsOnly porque bloquea + y -
-  inputFormatters: [
-    FilteringTextInputFormatter.allow(RegExp(r'[\d\+\-\s\(\)]')),
-    LengthLimitingTextInputFormatter(20), // por si meten +1 (xxx) xxx-xxxx
-  ],
-
-  decoration: InputDecoration(
-    labelText: "Teléfono (opcional)",
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: brandRed, width: 2),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.black12),
-    ),
-    suffixIcon: (selectedCliente != null)
-        ? IconButton(
-            tooltip: editingTel ? "Bloquear edición" : "Editar teléfono",
-            icon: Icon(editingTel ? Icons.edit_off : Icons.edit, color: brandRed),
-            onPressed: () {
-              setLocal(() => editingTel = !editingTel);
-              if (editingTel) {
-                Future.microtask(() => telFocus.requestFocus());
-              }
-            },
-          )
-        : null,
-  ),
-)
-
-,
-                  ],
+                    ],
+                  ),
                 ),
               ),
-
-              const SizedBox(height: 14),
-
-              // --------- Actions ----------
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () {
-                        _dialogAlive = false;
-                        _localDebounce?.cancel();
-                        Navigator.pop(context);
-                      },
-                      style: TextButton.styleFrom(foregroundColor: Colors.black54),
-                      child: const Text("Cancelar", style: TextStyle(fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brandRed,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: () async {
-                        final nombre = nombreCtrl.text.trim();
-                        final edad = int.tryParse(edadCtrl.text.trim()) ?? 0;
-                        final tel = normalizePhone(telCtrl.text);
-
-                        if (nombre.isEmpty) {
-                          _toast("El nombre es obligatorio");
-                          return;
-                        }
-
-                        if (edad <= 0 || edad > 120) {
-                          _toast("Edad inválida.");
-                          return;
-                        }
-
-                        // ✅ Crear en Odoo solo si NO seleccionó existente
-                        if (selectedCliente == null) {
-  final telClean = tel?.trim();
-  final res = await http.post(
-    Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      "nombre": nombre.trim(),
-      "edad": edad,
-      "telefono": (telClean == null || telClean.isEmpty) ? null : telClean,
-    }),
-  );
-
-  if (res.statusCode < 200 || res.statusCode >= 300) {
-    _toast("Error Odoo (${res.statusCode}): ${res.body}");
-    return;
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _dialogAlive = false;
+      _localDebounce?.cancel();
+      telFocus.dispose(); // ✅ importante
+    });
   }
-
-  final data = jsonDecode(res.body) as Map<String, dynamic>;
-  final created = data["created"] == true;
-
-  selectedCliente = (data["partner"] as Map).cast<String, dynamic>();
-
-  _toast(created ? "Cliente creado ✅" : "Cliente ya existía ♻️");
-}
-
-                        // ✅ Si seleccionó y cambió el tel, actualiza en Odoo
-                        if (selectedCliente != null) {
-  final newTel = telCtrl.text.trim();
-  if (newTel != originalTel) {
-    final partnerId = selectedCliente!['id'];
-    await http.post(
-      Uri.parse('$baseUrl/odoo/clientes/$partnerId/telefono'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({"telefono": newTel.isEmpty ? null : newTel}),
-    );
-  }
-}
-
-                        await _crearTurno(nombre, edad, tel);
-
-                        _dialogAlive = false;
-                        _localDebounce?.cancel();
-                        if (mounted) Navigator.pop(context);
-                      },
-                      child: const Text("Agregar", style: TextStyle(fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  },
-);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    },
-  ).then((_) {
-    // Si cierran tocando afuera o back: igual cancelamos debounce
-    _dialogAlive = false;
-    _localDebounce?.cancel();
-  });
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   // ----------------- Build -----------------
 

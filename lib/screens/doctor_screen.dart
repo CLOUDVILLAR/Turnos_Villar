@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -25,15 +24,17 @@ class DoctorScreen extends StatefulWidget {
 
 class _DoctorScreenState extends State<DoctorScreen> {
   static const Color brandRed = Color(0xFFE5361B);
+  static const Color brandGreen = Color(0xFF2E7D32);
 
   WebSocketChannel? channel;
+
   Map<String, dynamic>? turnoActual;
+  List<Map<String, dynamic>> cola = [];
 
   Timer? _pingTimer;
   Timer? _reconnectTimer;
   int? _lastStartedTurnoId;
-bool _starting = false;
-
+  bool _starting = false;
   bool _finishing = false;
 
   @override
@@ -41,10 +42,10 @@ bool _starting = false;
     super.initState();
     _connectWebSocket();
     _fetchTurnoActual();
+    _fetchTurnosEspera();
   }
 
   void _connectWebSocket() {
-    // evita duplicados al reconectar
     try {
       channel?.sink.close();
     } catch (_) {}
@@ -62,11 +63,14 @@ bool _starting = false;
           if (event is Map && event['type'] == 'turno_actual') {
             setState(() => turnoActual = (event['turno'] as Map?)?.cast<String, dynamic>());
             _iniciarTurnoSiHaceFalta();
+            _fetchTurnosEspera();
           } else {
             _fetchTurnoActual();
+            _fetchTurnosEspera();
           }
         } catch (_) {
           _fetchTurnoActual();
+          _fetchTurnosEspera();
         }
       },
       onError: (_) => _scheduleReconnect(),
@@ -95,6 +99,28 @@ bool _starting = false;
     });
   }
 
+  Future<void> _fetchTurnosEspera() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/turnos-espera/${widget.sucursalId}'));
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        final rawList = list.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList();
+
+        final currentId = turnoActual?['id'];
+
+        setState(() {
+          if (currentId != null) {
+            cola = rawList.where((t) => t['id'] != currentId).toList();
+          } else {
+            cola = rawList;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchTurnoActual() async {
     try {
       final res = await http.get(Uri.parse('$baseUrl/turno-actual/${widget.sucursalId}'));
@@ -103,41 +129,40 @@ bool _starting = false;
       if (res.statusCode == 200 && res.body != "null") {
         setState(() => turnoActual = (jsonDecode(res.body) as Map).cast<String, dynamic>());
         _iniciarTurnoSiHaceFalta();
+        _fetchTurnosEspera();
       } else {
         setState(() => turnoActual = null);
+        _fetchTurnosEspera();
       }
     } catch (_) {}
   }
 
   Future<void> _iniciarTurnoSiHaceFalta() async {
-  if (_starting) return;
-  if (turnoActual == null) return;
+    if (_starting) return;
+    if (turnoActual == null) return;
 
-  final id = turnoActual!['id'];
-  final estado = (turnoActual!['estado'] ?? 'espera').toString();
-  final inicio = turnoActual!['inicio_atencion'];
+    final id = turnoActual!['id'];
+    final estado = (turnoActual!['estado'] ?? 'espera').toString();
+    final inicio = turnoActual!['inicio_atencion'];
 
-  // Solo si está en espera y aún no tiene inicio_atencion
-  if (estado != 'espera') return;
-  if (inicio != null) return;
-  if (_lastStartedTurnoId == id) return;
+    if (estado != 'espera') return;
+    if (inicio != null) return;
+    if (_lastStartedTurnoId == id) return;
 
-  _starting = true;
-  _lastStartedTurnoId = id;
+    _starting = true;
+    _lastStartedTurnoId = id;
 
-  try {
-    await http.post(
-      Uri.parse('$baseUrl/iniciar-turno'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'turno_id': id}),
-    );
-  } catch (_) {
-    // ignore
-  } finally {
-    _starting = false;
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/iniciar-turno'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'turno_id': id}),
+      );
+    } catch (_) {
+    } finally {
+      _starting = false;
+    }
   }
-}
-
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -146,13 +171,86 @@ bool _starting = false;
         content: Text(msg),
         backgroundColor: brandRed,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
       ),
     );
   }
 
+  // ✅ Diálogo para copiar manualmente (sin Clipboard API)
+  void _showManualCopyDialog({
+  required String nombre,
+  required String telefono,
+}) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text("Copiar datos", style: TextStyle(fontWeight: FontWeight.w900)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Selecciona el texto y cópialo con Ctrl+C (o clic derecho → Copiar).",
+            style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+
+          const Text("Nombre", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              nombre.isEmpty ? "Sin nombre" : nombre,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text("Teléfono", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefono.isEmpty ? "N/A" : telefono,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cerrar"),
+        ),
+      ],
+    ),
+  );
+}
+
+
+
+
+
+
+
   Future<bool> _confirmFinalizar() async {
     if (turnoActual == null) return false;
-
     final nombre = (turnoActual!['nombre'] ?? '').toString();
 
     final result = await showDialog<bool>(
@@ -216,7 +314,6 @@ bool _starting = false;
       if (!mounted) return;
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        // Refresco inmediato (y además llegará WS)
         await _fetchTurnoActual();
       } else {
         _toast("No se pudo finalizar el turno");
@@ -238,7 +335,147 @@ bool _starting = false;
     super.dispose();
   }
 
- Widget _currentCard() {
+  // --- MODAL DEL CLIENTE EN COLA ---
+  void _showTurnoDetails(Map<String, dynamic> turno) {
+  final nombre = (turno['nombre'] ?? 'Sin nombre').toString();
+  final edad = (turno['edad'] ?? 'N/A').toString();
+  final tel = (turno['telefono'] ?? 'N/A').toString();
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: brandRed.withOpacity(0.1),
+                radius: 24,
+                child: const Icon(Icons.person, color: brandRed),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "DETALLE DEL PACIENTE",
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    // ✅ Nombre seleccionable
+                    SelectableText(
+                      nombre,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+              // ✅ Botón: abre diálogo para copiar manualmente nombre + teléfono
+              IconButton(
+                icon: const Icon(Icons.copy_all_rounded, color: brandRed),
+                tooltip: "Copiar Nombre y Teléfono (Manual)",
+                onPressed: () {
+                  _showManualCopyDialog(nombre: nombre, telefono: tel);
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Edad",
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
+                    Text("$edad años", style: const TextStyle(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Teléfono",
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
+                    // ✅ Tel también seleccionable aquí
+                    SelectableText(
+                      tel,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text("Cerrar", style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          )
+        ],
+      ),
+    ),
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Widget _currentCard() {
     if (turnoActual == null) {
       return Container(
         width: double.infinity,
@@ -299,38 +536,33 @@ bool _starting = false;
                   ),
                 ),
                 const SizedBox(height: 4),
-                
-                // --- AQUÍ ESTÁ EL CAMBIO ---
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
+                      // ✅ Nombre seleccionable también aquí
+                      child: SelectableText(
                         nombre.isEmpty ? "Sin nombre" : nombre,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Botón grande para copiar
+                    // ✅ Botón: abre diálogo para copiar manualmente
                     IconButton(
                       icon: const Icon(Icons.copy_all_rounded, color: Colors.white),
-                      iconSize: 32, // Tamaño aumentado para que sea "grande" y fácil de tocar
-                      tooltip: "Copiar Nombre",
+                      iconSize: 32,
+                      tooltip: "Copiar Nombre (Manual)",
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(), // Reduce el padding extra para ajustar mejor
+                      constraints: const BoxConstraints(),
                       onPressed: () {
-                        Clipboard.setData(ClipboardData(text: nombre));
-                        _toast("Nombre copiado al portapapeles");
+                        _showManualCopyDialog(nombre: nombre, telefono: tel);
                       },
                     ),
-                    const SizedBox(width: 8), // Un pequeño espacio extra
+                    const SizedBox(width: 8),
                   ],
                 ),
-                // ---------------------------
-
                 const SizedBox(height: 6),
                 Text(
                   "Edad: $edad  •  Tel: $tel",
@@ -356,21 +588,86 @@ bool _starting = false;
     );
   }
 
+  Widget _listaDeEspera() {
+    if (cola.isEmpty) return const SizedBox.shrink();
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12.0),
+          child: Text(
+            "SIGUIENTES EN FILA",
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Colors.black45,
+              letterSpacing: 1,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 60,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: cola.length,
+            itemBuilder: (context, index) {
+              final item = cola[index];
+              final nombre = (item['nombre'] ?? '').toString();
 
+              final isNext = index == 0;
 
-
-
-
-
-
-
-
-
-
-
-
-
+              return GestureDetector(
+                onTap: () => _showTurnoDetails(item),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isNext ? brandGreen : Colors.white,
+                    border: Border.all(
+                      color: isNext ? brandGreen : Colors.black12,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: isNext
+                            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+                            : const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: isNext ? Colors.white.withOpacity(0.2) : brandRed.withOpacity(0.1),
+                          shape: isNext ? BoxShape.rectangle : BoxShape.circle,
+                          borderRadius: isNext ? BorderRadius.circular(6) : null,
+                        ),
+                        child: Text(
+                          isNext ? "SIGUE" : "${index + 1}",
+                          style: TextStyle(
+                            color: isNext ? Colors.white : brandRed,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        nombre,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: isNext ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -391,6 +688,7 @@ bool _starting = false;
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _currentCard(),
               const SizedBox(height: 14),
@@ -421,21 +719,30 @@ bool _starting = false;
                   ),
                 ),
 
-              if (turnoActual == null) ...[
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: const Text(
-                    "Cuando llegue un cliente, aparecerá aquí automáticamente.",
-                    style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _listaDeEspera(),
+                      if (turnoActual == null && cola.isEmpty) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.black12),
+                          ),
+                          child: const Text(
+                            "Cuando llegue un cliente, aparecerá aquí automáticamente.",
+                            style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),

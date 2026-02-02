@@ -23,7 +23,10 @@ class EstadisticasScreen extends StatefulWidget {
 class _EstadisticasScreenState extends State<EstadisticasScreen> {
   static const Color brandRed = Color(0xFFE5361B);
 
-  DateTime _selectedDate = DateTime.now();
+  // ✅ Ahora el filtro es siempre un rango (por defecto: hoy → hoy)
+  DateTime _startDate = DateTime.now();
+  DateTime _endDate = DateTime.now();
+
   bool _loading = false;
 
   int totalAtendidos = 0;
@@ -33,12 +36,17 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 
   List<Map<String, dynamic>> clientes = [];
 
-
   @override
   void initState() {
     super.initState();
-    _fetch();
+    // ✅ Inicializa a “hoy”
+    final today = _dateOnly(DateTime.now());
+    _startDate = today;
+    _endDate = today;
+    _fetchRange(_startDate, _endDate);
   }
+
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   String _fmtDateApi(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
@@ -63,71 +71,166 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     return "${two(m)}:${two(r)}";
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2024, 1, 1),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: brandRed,
-              onPrimary: Colors.white,
-              onSurface: Colors.black87,
-            ),
-          ),
-          child: child!,
-        );
-      },
+  Theme _pickerTheme(Widget child) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: const ColorScheme.light(
+          primary: brandRed,
+          onPrimary: Colors.white,
+          onSurface: Colors.black87,
+        ),
+      ),
+      child: child,
     );
-
-    if (picked == null) return;
-    setState(() => _selectedDate = picked);
-    await _fetch();
   }
 
-  Future<void> _fetch() async {
-  setState(() => _loading = true);
-  try {
-    final fecha = _fmtDateApi(_selectedDate);
-    final res = await http.get(Uri.parse('$baseUrl/estadisticas/${widget.sucursalId}?fecha=$fecha'));
-
+  void _toast(String msg) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: brandRed,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
-    if (res.statusCode == 200) {
-      final data = (jsonDecode(res.body) as Map).cast<String, dynamic>();
+  // ==========================
+  // ✅ Solo botón "Filtro"
+  // Inicio → Fin (dos calendarios)
+  // ==========================
+  Future<void> _pickRangeTwoSteps() async {
+    if (_loading) return;
 
-      final list = (data['clientes'] as List<dynamic>)
-          .whereType<Map>()
-          .map((m) => m.cast<String, dynamic>())
-          .toList();
+    final today = _dateOnly(DateTime.now());
 
-      // ✅ AQUÍ VA EL SORT (ANTES DEL setState)
-      list.sort((a, b) {
+    // 1) Elegir inicio
+    final startPicked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2024, 1, 1),
+      lastDate: today.add(const Duration(days: 365)),
+      builder: (context, child) => _pickerTheme(child!),
+      helpText: "Selecciona día de inicio",
+    );
+
+    if (startPicked == null) return;
+    final start = _dateOnly(startPicked);
+
+    // 2) Elegir fin (no puede ser antes del inicio)
+    final endPicked = await showDatePicker(
+      context: context,
+      initialDate: _endDate.isBefore(start) ? start : _endDate,
+      firstDate: start,
+      lastDate: today.add(const Duration(days: 365)),
+      builder: (context, child) => _pickerTheme(child!),
+      helpText: "Selecciona día de cierre",
+    );
+
+    if (endPicked == null) return;
+    final end = _dateOnly(endPicked);
+
+    setState(() {
+      _startDate = start;
+      _endDate = end;
+    });
+
+    await _fetchRange(start, end);
+  }
+
+  // ==========================
+  // ✅ Fetch por día (reusa tu endpoint)
+  // ==========================
+  Future<Map<String, dynamic>?> _fetchDay(DateTime day) async {
+    try {
+      final fecha = _fmtDateApi(day);
+      final res = await http.get(
+        Uri.parse('$baseUrl/estadisticas/${widget.sucursalId}?fecha=$fecha'),
+      );
+      if (res.statusCode == 200) {
+        return (jsonDecode(res.body) as Map).cast<String, dynamic>();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _fetchRange(DateTime start, DateTime end) async {
+    if (_loading) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final s = _dateOnly(start);
+      final e = _dateOnly(end);
+
+      final days = e.difference(s).inDays + 1;
+      if (days <= 0) {
+        _toast("Rango inválido");
+        return;
+      }
+
+      // ✅ límite para no hacer demasiadas llamadas
+      if (days > 62) {
+        _toast("Rango muy grande (máx 62 días).");
+        return;
+      }
+
+      final allClientes = <Map<String, dynamic>>[];
+
+      for (int i = 0; i < days; i++) {
+        final day = s.add(Duration(days: i));
+        final data = await _fetchDay(day);
+        if (data == null) continue;
+
+        final list = (data['clientes'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map((m) => m.cast<String, dynamic>())
+            .toList();
+
+        allClientes.addAll(list);
+      }
+
+      // ✅ Recalcular KPIs desde los clientes reales
+      final count = allClientes.length;
+
+      double sumTotal = 0;
+      double sumEspera = 0;
+      double sumAtencion = 0;
+
+      for (final c in allClientes) {
+        sumTotal += (c['total_seg'] ?? 0).toDouble();
+        sumEspera += (c['espera_seg'] ?? 0).toDouble();
+        sumAtencion += (c['atencion_seg'] ?? 0).toDouble();
+      }
+
+      // ✅ Orden por created_at desc
+      allClientes.sort((a, b) {
         final aT = DateTime.tryParse((a['created_at'] ?? '').toString()) ??
             DateTime.fromMillisecondsSinceEpoch(0);
         final bT = DateTime.tryParse((b['created_at'] ?? '').toString()) ??
             DateTime.fromMillisecondsSinceEpoch(0);
-        return bT.compareTo(aT); // DESC: últimos primero
+        return bT.compareTo(aT);
       });
 
+      if (!mounted) return;
       setState(() {
-        totalAtendidos = (data['total_atendidos'] ?? 0) as int;
-        avgTotal = (data['promedio_total_seg'] ?? 0).toDouble();
-        avgEspera = (data['promedio_espera_seg'] ?? 0).toDouble();
-        avgAtencion = (data['promedio_atencion_seg'] ?? 0).toDouble();
-        clientes = list; // <- ya ordenada
+        totalAtendidos = count;
+        avgTotal = count == 0 ? 0 : (sumTotal / count);
+        avgEspera = count == 0 ? 0 : (sumEspera / count);
+        avgAtencion = count == 0 ? 0 : (sumAtencion / count);
+        clientes = allClientes;
       });
+    } catch (_) {
+      // ignore
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-  } catch (_) {
-    // ignore
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
 
+  // ==========================
+  // UI
+  // ==========================
 
   Widget _kpi(String title, String value) {
     return Container(
@@ -149,89 +252,14 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+          Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
+          ),
         ],
       ),
     );
   }
-
-  Widget _clientTile(int index, Map<String, dynamic> c) {
-  final nombre = (c['nombre'] ?? '').toString();
-  final edad = (c['edad'] ?? '').toString();
-  final tel = (c['telefono'] ?? 'N/A').toString();
-
-  final espera = (c['espera_seg'] ?? 0).toDouble();
-  final atencion = (c['atencion_seg'] ?? 0).toDouble();
-  final total = (c['total_seg'] ?? 0).toDouble();
-
-  final pos = index + 1;
-
-  return Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.black12),
-      color: Colors.white,
-    ),
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: brandRed.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: brandRed.withOpacity(0.35)),
-        ),
-        child: Center(
-          child: Text(
-            "$pos",
-            style: const TextStyle(fontWeight: FontWeight.w900, color: brandRed),
-          ),
-        ),
-      ),
-      title: Text(
-        nombre.isEmpty ? "Sin nombre" : nombre,
-        style: const TextStyle(fontWeight: FontWeight.w900),
-        overflow: TextOverflow.ellipsis,
-      ),
-
-      // ✅ aquí mostramos edad + teléfono
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                _pill("Edad", "$edad"),
-                _pill("Tel", tel),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                _pill("Espera", _fmtDuration(espera)),
-                _pill("Atención", _fmtDuration(atencion)),
-                _pill("Total", _fmtDuration(total), strong: true),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-
-
-
-
-
 
   Widget _pill(String label, String value, {bool strong = false}) {
     return Container(
@@ -252,10 +280,83 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     );
   }
 
+  Widget _clientTile(int index, Map<String, dynamic> c) {
+    final nombre = (c['nombre'] ?? '').toString();
+    final edad = (c['edad'] ?? '').toString();
+    final tel = (c['telefono'] ?? 'N/A').toString();
+
+    final espera = (c['espera_seg'] ?? 0).toDouble();
+    final atencion = (c['atencion_seg'] ?? 0).toDouble();
+    final total = (c['total_seg'] ?? 0).toDouble();
+
+    final pos = index + 1;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+        color: Colors.white,
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: brandRed.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: brandRed.withOpacity(0.35)),
+          ),
+          child: Center(
+            child: Text(
+              "$pos",
+              style: const TextStyle(fontWeight: FontWeight.w900, color: brandRed),
+            ),
+          ),
+        ),
+        title: Text(
+          nombre.isEmpty ? "Sin nombre" : nombre,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  _pill("Edad", "$edad"),
+                  _pill("Tel", tel),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  _pill("Espera", _fmtDuration(espera)),
+                  _pill("Atención", _fmtDuration(atencion)),
+                  _pill("Total", _fmtDuration(total), strong: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+ String get _rangeUiText {
+  final a = _fmtDateUi(_startDate);
+  final b = _fmtDateUi(_endDate);
+  return "Rango: $a → $b";
+}
   @override
   Widget build(BuildContext context) {
-    final fechaUi = _fmtDateUi(_selectedDate);
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -264,17 +365,12 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
         elevation: 0,
         title: Text("${widget.sucursalNombre} • Estadísticas"),
         actions: [
-  IconButton(
-    onPressed: _loading ? null : _fetch,
-    icon: const Icon(Icons.refresh),
-    tooltip: "Recargar",
-  ),
-  IconButton(
-    onPressed: _pickDate,
-    icon: const Icon(Icons.calendar_month),
-    tooltip: "Seleccionar fecha",
-  ),
-],
+          IconButton(
+            onPressed: _loading ? null : () => _fetchRange(_startDate, _endDate),
+            icon: const Icon(Icons.refresh),
+            tooltip: "Recargar",
+          ),
+        ],
       ),
       drawer: CustomDrawer(
         sucursalId: widget.sucursalId,
@@ -290,31 +386,30 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Fecha seleccionada + botón
+                  // Texto de rango + botón único Filtro
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          "Fecha seleccionada: $fechaUi",
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                        ),
+  _rangeUiText,
+  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _pickDate,
+                        onPressed: _loading ? null : _pickRangeTwoSteps,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: brandRed,
                           side: const BorderSide(color: brandRed),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                         icon: const Icon(Icons.tune),
-                        label: const Text("Cambiar"),
+                        label: const Text("Filtro"),
                       ),
                     ],
                   ),
 
                   const SizedBox(height: 12),
 
-                  // KPIs (centrados por ancho max y en Wrap para responsive)
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -357,7 +452,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                               border: Border.all(color: Colors.black12),
                             ),
                             child: const Text(
-                              "No hay clientes atendidos en esa fecha.",
+                              "No hay clientes atendidos en ese rango.",
                               style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black54),
                             ),
                           )
@@ -365,7 +460,6 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                             itemCount: clientes.length,
                             itemBuilder: (context, i) => _clientTile(i, clientes[i]),
                           ),
-                          
                   ),
                 ],
               ),

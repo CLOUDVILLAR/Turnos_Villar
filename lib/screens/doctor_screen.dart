@@ -7,6 +7,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../utils/ip.dart';
 import '../widgets/custom_drawer.dart';
+import '../utils/turno_sound.dart';
 
 class DoctorScreen extends StatefulWidget {
   final int sucursalId;
@@ -28,8 +29,27 @@ class _DoctorScreenState extends State<DoctorScreen> {
 
   WebSocketChannel? channel;
 
+
   Map<String, dynamic>? turnoActual;
   List<Map<String, dynamic>> cola = [];
+
+
+  late final TurnoSound _turnoSound;
+
+final Set<String> _seenTurnoKeys = <String>{};
+bool _didInitialQueueFetch = false;
+
+String? _keyFromTurno(Map<String, dynamic>? t) {
+  if (t == null) return null;
+
+  final id = t['id'] ?? t['turno_id'] ?? t['numero'];
+  if (id != null) return id.toString();
+
+  final nombre = (t['nombre'] ?? '').toString();
+  final tel = (t['telefono'] ?? '').toString();
+  final edad = (t['edad'] ?? '').toString();
+  return '$nombre|$tel|$edad';
+}
 
   Timer? _pingTimer;
   Timer? _reconnectTimer;
@@ -37,13 +57,17 @@ class _DoctorScreenState extends State<DoctorScreen> {
   bool _starting = false;
   bool _finishing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _connectWebSocket();
-    _fetchTurnoActual();
-    _fetchTurnosEspera();
-  }
+ @override
+void initState() {
+  super.initState();
+
+  _turnoSound = makeTurnoSound();
+  _turnoSound.init();
+
+  _connectWebSocket();
+  _fetchTurnoActual();
+  _fetchTurnosEspera();
+}
 
   void _connectWebSocket() {
     try {
@@ -100,26 +124,45 @@ class _DoctorScreenState extends State<DoctorScreen> {
   }
 
   Future<void> _fetchTurnosEspera() async {
-    try {
-      final res = await http.get(Uri.parse('$baseUrl/turnos-espera/${widget.sucursalId}'));
-      if (!mounted) return;
+  try {
+    final res = await http.get(Uri.parse('$baseUrl/turnos-espera/${widget.sucursalId}'));
+    if (!mounted) return;
 
-      if (res.statusCode == 200) {
-        final list = jsonDecode(res.body) as List<dynamic>;
-        final rawList = list.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList();
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List<dynamic>;
+      final rawList = list.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList();
 
-        final currentId = turnoActual?['id'];
+      // Detectar si llegó un turno nuevo
+      final newKeys = rawList
+          .map((t) => _keyFromTurno(t))
+          .whereType<String>()
+          .toSet();
 
-        setState(() {
-          if (currentId != null) {
-            cola = rawList.where((t) => t['id'] != currentId).toList();
-          } else {
-            cola = rawList;
-          }
-        });
+      final hasNewTurn =
+          _didInitialQueueFetch && newKeys.difference(_seenTurnoKeys).isNotEmpty;
+
+      // Actualiza “vistos”
+      _seenTurnoKeys.addAll(newKeys);
+      _didInitialQueueFetch = true;
+
+      final currentId = turnoActual?['id'];
+
+      setState(() {
+        if (currentId != null) {
+          cola = rawList.where((t) => t['id'] != currentId).toList();
+        } else {
+          cola = rawList;
+        }
+      });
+
+      // 🔔 EXACTAMENTE AQUÍ suena cuando llega un turno nuevo
+      if (hasNewTurn) {
+        _turnoSound.play();
       }
-    } catch (_) {}
-  }
+    }
+  } catch (_) {}
+}
+
 
   Future<void> _fetchTurnoActual() async {
     try {
@@ -325,15 +368,17 @@ class _DoctorScreenState extends State<DoctorScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _pingTimer?.cancel();
-    _reconnectTimer?.cancel();
-    try {
-      channel?.sink.close();
-    } catch (_) {}
-    super.dispose();
-  }
+ @override
+void dispose() {
+  _turnoSound.dispose();
+
+  _pingTimer?.cancel();
+  _reconnectTimer?.cancel();
+  try {
+    channel?.sink.close();
+  } catch (_) {}
+  super.dispose();
+}
 
   // --- MODAL DEL CLIENTE EN COLA ---
   void _showTurnoDetails(Map<String, dynamic> turno) {
@@ -674,11 +719,24 @@ class _DoctorScreenState extends State<DoctorScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: brandRed,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text("${widget.sucursalNombre} • Doctor"),
-      ),
+  backgroundColor: brandRed,
+  foregroundColor: Colors.white,
+  elevation: 0,
+  title: Text("${widget.sucursalNombre} • Doctor"),
+  actions: [
+    IconButton(
+      tooltip: _turnoSound.enabled ? "Sonido activado" : "Activar sonido",
+      icon: Icon(_turnoSound.enabled ? Icons.notifications_active : Icons.notifications_off),
+      onPressed: () async {
+        await _turnoSound.enable();
+        if (!mounted) return;
+        _toast(_turnoSound.enabled
+            ? "Sonido activado 🔔"
+            : "El navegador bloqueó el audio. Toca otra vez.");
+      },
+    ),
+  ],
+),
       drawer: CustomDrawer(
         sucursalId: widget.sucursalId,
         sucursalNombre: widget.sucursalNombre,

@@ -6,6 +6,8 @@ from datetime import date
 import anyio
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import re
+from services.odoo_service import OdooClient
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
@@ -77,26 +79,52 @@ def db_get_turno_actual(sucursal_id: int) -> Optional[dict]:
     finally:
         conn.close()
 
-def db_crear_turno(sucursal_id: int, nombre: str, edad: int, telefono: Optional[str]) -> int:
+def db_crear_turno_seguro(
+    sucursal_id: int,
+    nombre: str,
+    edad: int,
+    telefono: Optional[str],
+) -> Optional[int]:
+    """
+    Crea un turno SOLO si no existe otro activo.
+    Devuelve el id si se creó, o None si ya existía.
+    """
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
             """
             INSERT INTO turnos (sucursal_id, nombre, edad, telefono, estado)
-            VALUES (%s, %s, %s, %s, 'espera')
+            SELECT %s, %s, %s, %s, 'espera'
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM turnos
+                WHERE sucursal_id = %s
+                  AND estado IN ('espera', 'atendiendo')
+                  AND (
+                        (%s IS NOT NULL AND telefono = %s)
+                     OR (%s IS NULL AND nombre = %s)
+                  )
+            )
             RETURNING id
             """,
-            (sucursal_id, nombre, edad, telefono),
+            (
+                sucursal_id, nombre, edad, telefono,
+                sucursal_id,
+                telefono, telefono,
+                telefono, nombre,
+            ),
         )
-        new_id = cur.fetchone()[0]
+
+        row = cur.fetchone()
         conn.commit()
-        return new_id
+        return row[0] if row else None
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+
 
 def db_finalizar_turno(turno_id: int) -> int:
     """
@@ -196,6 +224,56 @@ class TurnoCreate(BaseModel):
 class FinalizarTurno(BaseModel):
     turno_id: int
 
+
+def _phone_digits(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    d = re.sub(r"\D+", "", raw)
+    return d or None
+
+
+async def _get_odoo_name_by_phone(telefono: Optional[str]) -> Optional[str]:
+    """
+    Busca en Odoo por teléfono (ignorando formato) y devuelve el partner.name.
+    Si no encuentra, devuelve None.
+    """
+    d = _phone_digits(telefono)
+    if not d:
+        return None
+
+    client = OdooClient()
+
+    last4 = d[-4:] if len(d) >= 4 else None
+    last7 = d[-7:] if len(d) >= 7 else None
+    last10 = d[-10:] if len(d) >= 10 else None
+
+    terms = [
+        (telefono or "").strip(),  # tal cual (por si Odoo lo tiene igual)
+        d,                         # pegado
+        f"+{d}",                   # pegado con +
+        last10,                    # últimos 10
+        last7,                     # últimos 7
+        last4,                     # últimos 4
+    ]
+
+    seen = set()
+    for t in terms:
+        if not t:
+            continue
+        if t in seen:
+            continue
+        seen.add(t)
+
+        candidates = await anyio.to_thread.run_sync(client.search_partners, t, 25)
+        for p in candidates:
+            if _phone_digits(p.get("phone")) == d or _phone_digits(p.get("mobile")) == d:
+                name = (p.get("name") or "").strip()
+                if name:
+                    return name
+
+    return None
+
+
 # --------- Endpoints HTTP ---------
 
 @app.post("/login")
@@ -224,24 +302,84 @@ def get_turnos_espera(sucursal_id: int):
     # FastAPI convertirá datetimes bien en HTTP
     return db_get_turnos_espera(sucursal_id)
 
+
+
+def db_turno_activo_existente(
+    sucursal_id: int,
+    telefono: Optional[str],
+    nombre: str,
+) -> bool:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if telefono:
+            cur.execute(
+                """
+                SELECT 1
+                FROM turnos
+                WHERE sucursal_id = %s
+                  AND telefono = %s
+                  AND estado IN ('espera', 'atendiendo')
+                LIMIT 1
+                """,
+                (sucursal_id, telefono),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT 1
+                FROM turnos
+                WHERE sucursal_id = %s
+                  AND nombre = %s
+                  AND estado IN ('espera', 'atendiendo')
+                LIMIT 1
+                """,
+                (sucursal_id, nombre),
+            )
+
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+
 @app.post("/crear-turno")
 async def crear_turno(turno: TurnoCreate):
     try:
+        # 1) Normalizar nombre usando Odoo si existe
+        odoo_name = await _get_odoo_name_by_phone(turno.telefono)
+        nombre_final = (odoo_name or turno.nombre).strip()
+
+        # 2) Crear turno de forma ATÓMICA (sin race conditions)
         new_id = await anyio.to_thread.run_sync(
-            db_crear_turno,
+            db_crear_turno_seguro,   # 👈 función segura
             turno.sucursal_id,
-            turno.nombre,
+            nombre_final,
             turno.edad,
             turno.telefono,
         )
 
-        # 🔥 clave: broadcast del estado ACTUAL ya calculado
+        # 3) Si no se creó, ya existía un turno activo
+        if not new_id:
+            return {
+                "status": "ok",
+                "mensaje": "El cliente ya tiene un turno activo",
+            }
+
+        # 4) Broadcast del estado actual
         payload = await build_turno_actual_event(turno.sucursal_id)
         await manager.broadcast(turno.sucursal_id, payload)
 
-        return {"id": new_id, "status": "creado"}
+        return {
+            "id": new_id,
+            "status": "creado",
+            "nombre": nombre_final,
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/finalizar-turno")
 async def finalizar_turno(data: FinalizarTurno):

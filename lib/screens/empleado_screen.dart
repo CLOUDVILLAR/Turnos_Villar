@@ -19,6 +19,11 @@ import '../utils/turno_sound.dart';
 ///  (Reciben BuildContext para no depender de variables del State)
 /// =======================
 
+/// =======================
+///  Dialogs (GLOBAL)
+///  (Reciben BuildContext para no depender de variables del State)
+/// =======================
+
 void _showManualCopyDialog(
   BuildContext context, {
   required String nombre,
@@ -112,8 +117,6 @@ Future<bool> _showTelefonoYaAsignadoDialog(
             style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 10),
-
-          // Nombre en negrita + seleccionable
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -127,10 +130,7 @@ Future<bool> _showTelefonoYaAsignadoDialog(
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // Teléfono seleccionable
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -144,12 +144,14 @@ Future<bool> _showTelefonoYaAsignadoDialog(
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
-
           const SizedBox(height: 10),
-
           TextButton.icon(
             onPressed: () {
-              _showManualCopyDialog(context, nombre: nombreExistente, telefono: telefono);
+              _showManualCopyDialog(
+                context,
+                nombre: nombreExistente,
+                telefono: telefono,
+              );
             },
             icon: Icon(Icons.copy_all_rounded, color: brandRed),
             label: Text(
@@ -184,6 +186,198 @@ Future<bool> _showTelefonoYaAsignadoDialog(
 
   return result ?? false;
 }
+
+Future<String?> _showPosibleDuplicadoPorNombreDialog(
+  BuildContext context, {
+  required String nombreExistente,
+  required String telefonoExistente,
+  required Color brandRed,
+}) async {
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text(
+        "Posible cliente duplicado",
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Ya existe un cliente con este nombre. Verifica si es la misma persona antes de crear otro registro.",
+            style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          const Text("Nombre", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              nombreExistente,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text("Teléfono actual en Odoo", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefonoExistente.trim().isEmpty ? "Sin teléfono" : telefonoExistente,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, 'cancel'),
+          style: TextButton.styleFrom(foregroundColor: Colors.black54),
+          child: const Text("Cancelar"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, 'create_new'),
+          style: TextButton.styleFrom(foregroundColor: brandRed),
+          child: const Text(
+            "No, crear nuevo",
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, 'same'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: brandRed,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text(
+            "Sí, es el mismo",
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return result;
+}
+
+Future<String?> _showActualizarTelefonoExistenteDialog(
+  BuildContext context, {
+  required String nombreExistente,
+  required String telefonoActual,
+  required String telefonoNuevo,
+  required Color brandRed,
+}) async {
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text(
+        "Actualizar teléfono",
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "El cliente $nombreExistente ya existe. ¿Deseas actualizar su teléfono en Odoo?",
+            style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          const Text("Teléfono actual", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefonoActual.trim().isEmpty ? "Sin teléfono" : telefonoActual,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text("Nuevo teléfono", style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: SelectableText(
+              telefonoNuevo,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, 'cancel'),
+          style: TextButton.styleFrom(foregroundColor: Colors.black54),
+          child: const Text("Cancelar"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, 'keep'),
+          style: TextButton.styleFrom(foregroundColor: brandRed),
+          child: const Text(
+            "No actualizar",
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, 'update'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: brandRed,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text(
+            "Sí, actualizar",
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return result;
+}
+
+
+
+
+
 
 /// =======================
 ///  Helpers (GLOBAL)
@@ -868,6 +1062,7 @@ void _dialogToast(String msg) {
 
     Timer? _localDebounce;
     bool _dialogAlive = true;
+    bool isSubmitting = false;
 
     void safeSetLocal(StateSetter setLocal, VoidCallback fn) {
       if (!_dialogAlive) return;
@@ -893,6 +1088,7 @@ void _dialogToast(String msg) {
     body: Center(
       child: StatefulBuilder(
         builder: (context, setLocal) {
+          
           void onNombreChanged(String value) {
             selectedCliente = null;
 
@@ -1167,118 +1363,322 @@ void _dialogToast(String msg) {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            onPressed: () async {
-                              final nombre = nombreCtrl.text.trim();
-                              final edad = int.tryParse(edadCtrl.text.trim()) ?? 0;
+                            onPressed: isSubmitting
+    ? null
+    : () async {
+        setLocal(() => isSubmitting = true);
 
-                              final telNorm = normalizePhone(telCtrl.text);
+        try {
+          final nombre = nombreCtrl.text.trim();
+          final edad = int.tryParse(edadCtrl.text.trim()) ?? 0;
+          final telNorm = normalizePhone(telCtrl.text);
 
-                              if (nombre.isEmpty) {
-                                _dialogToast("El nombre es obligatorio");
-                                return;
-                              }
+          if (nombre.isEmpty) {
+            _dialogToast("El nombre es obligatorio");
+            return;
+          }
 
-                              if (selectedCliente == null && !hasNombreYApellido(nombre)) {
-                                _dialogToast("Debes ingresar el apellido.");
-                                return;
-                              }
+          if (selectedCliente == null && !hasNombreYApellido(nombre)) {
+            _dialogToast("Debes ingresar el apellido.");
+            return;
+          }
 
-                              if (edad <= 0 || edad > 120) {
-                                _dialogToast("Edad inválida.");
-                                return;
-                              }
+          if (edad <= 0 || edad > 120) {
+            _dialogToast("Edad inválida.");
+            return;
+          }
 
-                              if (telNorm == null) {
-                                _dialogToast("El teléfono es obligatorio.");
-                                setLocal(() => editingTel = true);
-                                Future.microtask(() => telFocus.requestFocus());
-                                return;
-                              }
+          if (telNorm == null) {
+            _dialogToast("El teléfono es obligatorio.");
+            setLocal(() => editingTel = true);
+            Future.microtask(() => telFocus.requestFocus());
+            return;
+          }
 
-                              if (selectedCliente == null) {
-                                final res = await http.post(
-                                  Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
-                                  headers: {'Content-Type': 'application/json'},
-                                  body: jsonEncode({
-                                    "nombre": nombre.trim(),
-                                    "edad": edad,
-                                    "telefono": telNorm,
-                                  }),
-                                );
+          // -------- ODOO: seleccionar o crear --------
+          // -------- ODOO: seleccionar o crear --------
+if (selectedCliente == null) {
+  Future<Map<String, dynamic>> callSelectOrCreate({bool forzarCreacion = false}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/odoo/clientes/seleccionar-o-crear'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "nombre": nombre.trim(),
+        "edad": edad,
+        "telefono": telNorm,
+        if (forzarCreacion) "forzar_creacion": true,
+      }),
+    );
 
-                                if (res.statusCode < 200 || res.statusCode >= 300) {
-                                  _dialogToast("Error Odoo (${res.statusCode}): ${res.body}");
-                                  return;
-                                }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception("Error Odoo (${res.statusCode})");
+    }
 
-                                final data = jsonDecode(res.body) as Map<String, dynamic>;
-                                final created = data["created"] == true;
-                                final partner = (data["partner"] as Map).cast<String, dynamic>();
+    return (jsonDecode(res.body) as Map).cast<String, dynamic>();
+  }
 
-                                if (!created) {
-                                  final existingName = (partner["name"] ?? "").toString();
-                                  final existingPhone =
-                                      ((partner["phone"] ?? partner["mobile"]) ?? telNorm).toString();
+  Map<String, dynamic> data;
+  try {
+    data = await callSelectOrCreate();
+  } catch (e) {
+    _dialogToast(e.toString().replaceFirst("Exception: ", ""));
+    return;
+  }
 
-                                  final usarExistente = await _showTelefonoYaAsignadoDialog(
-                                    context,
-                                    telefono: existingPhone,
-                                    nombreExistente: existingName.isEmpty ? "Cliente" : existingName,
-                                    brandRed: brandRed,
-                                  );
+  final status = (data["status"] ?? "").toString();
+  final created = data["created"] == true;
+  final possibleDuplicate = data["possible_duplicate"] == true;
 
-                                  if (!usarExistente) return;
+  final partnerRaw = data["partner"];
+  final partner = partnerRaw is Map
+      ? partnerRaw.cast<String, dynamic>()
+      : <String, dynamic>{};
 
-                                  selectedCliente = partner;
-                                  nombreCtrl.text = (partner["name"] ?? nombre).toString();
-                                  final pTel =
-                                      ((partner["phone"] ?? partner["mobile"]) ?? telNorm).toString();
-                                  telCtrl.text = pTel;
+  // 1) Ya existe por teléfono
+  if (status == "existing_phone") {
+    final existingName = (partner["name"] ?? "Cliente").toString();
+    final existingPhone =
+        ((partner["phone"] ?? partner["mobile"]) ?? telNorm).toString();
 
-                                  originalTel = pTel;
-                                  editingTel = false;
-                                  savingTel = false;
+    final usarExistente = await _showTelefonoYaAsignadoDialog(
+      context,
+      telefono: existingPhone,
+      nombreExistente: existingName,
+      brandRed: brandRed,
+    );
 
-                                  _dialogToast("Usando cliente existente ♻️");
-                                } else {
-                                  selectedCliente = partner;
-                                  _dialogToast("Cliente creado ✅");
-                                }
-                              }
+    if (!usarExistente) return;
 
-                              if (selectedCliente != null) {
-                                final newTelNorm = normalizePhone(telCtrl.text);
+    safeSetLocal(setLocal, () {
+      selectedCliente = partner;
+      nombreCtrl.text = (partner["name"] ?? nombre).toString();
+      telCtrl.text = existingPhone;
+      originalTel = existingPhone;
+      editingTel = existingPhone.trim().isEmpty;
+      savingTel = false;
+    });
 
-                                if (newTelNorm == null) {
-                                  _dialogToast("El teléfono es obligatorio.");
-                                  setLocal(() => editingTel = true);
-                                  Future.microtask(() => telFocus.requestFocus());
-                                  return;
-                                }
+    if (editingTel) {
+      Future.microtask(() => telFocus.requestFocus());
+    }
 
-                                final oldTelNorm = normalizePhone(originalTel);
-                                if (newTelNorm != oldTelNorm) {
-                                  final partnerId = selectedCliente!['id'];
-                                  await http.post(
-                                    Uri.parse('$baseUrl/odoo/clientes/$partnerId/telefono'),
-                                    headers: {'Content-Type': 'application/json'},
-                                    body: jsonEncode({"telefono": newTelNorm}),
-                                  );
-                                }
-                              }
+    _dialogToast("Usando cliente existente ♻️");
+  }
 
-                              await _crearTurno(
-                                nombre,
-                                edad,
-                                telNorm,
-                                requireApellido: selectedCliente == null,
-                              );
+  // 2) Posible duplicado por nombre
+  else if (possibleDuplicate || status == "possible_duplicate_by_name") {
+    final existingName = (partner["name"] ?? nombre).toString();
+    final existingPhone = ((partner["phone"] ?? partner["mobile"]) ?? '').toString();
 
-                              _dialogAlive = false;
-                              _localDebounce?.cancel();
-                              if (mounted) Navigator.pop(context);
-                            },
-                            child: const Text("Agregar", style: TextStyle(fontWeight: FontWeight.w900)),
+    final duplicateDecision = await _showPosibleDuplicadoPorNombreDialog(
+      context,
+      nombreExistente: existingName,
+      telefonoExistente: existingPhone,
+      brandRed: brandRed,
+    );
+
+    if (duplicateDecision == null || duplicateDecision == 'cancel') return;
+
+    // 2A) El empleado dice que NO es la misma persona -> crear nuevo forzado
+    if (duplicateDecision == 'create_new') {
+      Map<String, dynamic> forcedData;
+      try {
+        forcedData = await callSelectOrCreate(forzarCreacion: true);
+      } catch (e) {
+        _dialogToast(e.toString().replaceFirst("Exception: ", ""));
+        return;
+      }
+
+      final forcedPartnerRaw = forcedData["partner"];
+      final forcedPartner = forcedPartnerRaw is Map
+          ? forcedPartnerRaw.cast<String, dynamic>()
+          : <String, dynamic>{};
+
+      final createdPhone =
+          ((forcedPartner["phone"] ?? forcedPartner["mobile"]) ?? telCtrl.text).toString();
+
+      safeSetLocal(setLocal, () {
+        selectedCliente = forcedPartner;
+        nombreCtrl.text = (forcedPartner["name"] ?? nombre).toString();
+        telCtrl.text = createdPhone;
+        originalTel = createdPhone;
+        editingTel = false;
+        savingTel = false;
+      });
+
+      _dialogToast("Cliente nuevo creado ✅");
+    }
+
+    // 2B) El empleado dice que SÍ es la misma persona
+    else if (duplicateDecision == 'same') {
+      final typedPhone = telCtrl.text.trim();
+      final typedPhoneNorm = normalizePhone(typedPhone);
+      final existingPhoneNorm = normalizePhone(existingPhone);
+
+      safeSetLocal(setLocal, () {
+        selectedCliente = partner;
+        nombreCtrl.text = (partner["name"] ?? nombre).toString();
+        originalTel = existingPhone;
+        savingTel = false;
+      });
+
+      // Caso especial: el cliente existente no tiene teléfono guardado
+      if (existingPhone.trim().isEmpty && typedPhoneNorm != null) {
+        safeSetLocal(setLocal, () {
+          telCtrl.text = typedPhone;
+          editingTel = true;
+        });
+
+        Future.microtask(() => telFocus.requestFocus());
+        _dialogToast("Cliente existente encontrado. Se guardará el nuevo teléfono ✅");
+      }
+
+      // Si el teléfono escrito es distinto al actual, preguntar si se actualiza Odoo
+      else if (typedPhoneNorm != null && typedPhoneNorm != existingPhoneNorm) {
+        final updateDecision = await _showActualizarTelefonoExistenteDialog(
+          context,
+          nombreExistente: existingName,
+          telefonoActual: existingPhone,
+          telefonoNuevo: typedPhone,
+          brandRed: brandRed,
+        );
+
+        if (updateDecision == null || updateDecision == 'cancel') return;
+
+        if (updateDecision == 'update') {
+          safeSetLocal(setLocal, () {
+            telCtrl.text = typedPhone;
+            editingTel = true;
+          });
+
+          Future.microtask(() => telFocus.requestFocus());
+          _dialogToast("Se usará el cliente existente y se actualizará su teléfono ✅");
+        } else {
+          safeSetLocal(setLocal, () {
+            telCtrl.text = existingPhone;
+            editingTel = existingPhone.trim().isEmpty;
+          });
+
+          if (editingTel) {
+            Future.microtask(() => telFocus.requestFocus());
+          }
+
+          _dialogToast("Usando cliente existente con su teléfono actual ♻️");
+        }
+      }
+
+      // Si el teléfono coincide, usar cliente existente sin más preguntas
+      else {
+        safeSetLocal(setLocal, () {
+          telCtrl.text = existingPhone;
+          editingTel = existingPhone.trim().isEmpty;
+        });
+
+        if (editingTel) {
+          Future.microtask(() => telFocus.requestFocus());
+        }
+
+        _dialogToast("Usando cliente existente ♻️");
+      }
+    }
+  }
+
+  // 3) Cliente nuevo creado normalmente
+  else if (created) {
+    final createdPhone =
+        ((partner["phone"] ?? partner["mobile"]) ?? telCtrl.text).toString();
+
+    safeSetLocal(setLocal, () {
+      selectedCliente = partner;
+      nombreCtrl.text = (partner["name"] ?? nombre).toString();
+      telCtrl.text = createdPhone;
+      originalTel = createdPhone;
+      editingTel = false;
+      savingTel = false;
+    });
+
+    _dialogToast("Cliente creado ✅");
+  }
+
+  // 4) Respuesta inesperada
+  else {
+    _dialogToast("Respuesta inesperada de Odoo.");
+    return;
+  }
+}
+
+
+
+
+
+
+
+          // -------- actualizar teléfono si cambió --------
+          if (selectedCliente != null) {
+            final newTelNorm = normalizePhone(telCtrl.text);
+
+            if (newTelNorm == null) {
+              _dialogToast("El teléfono es obligatorio.");
+              setLocal(() => editingTel = true);
+              Future.microtask(() => telFocus.requestFocus());
+              return;
+            }
+
+            final oldTelNorm = normalizePhone(originalTel);
+            if (newTelNorm != oldTelNorm) {
+              final partnerId = selectedCliente!['id'];
+              await http.post(
+                Uri.parse('$baseUrl/odoo/clientes/$partnerId/telefono'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({"telefono": newTelNorm}),
+              );
+            }
+          }
+
+          // -------- crear turno (UNA SOLA VEZ) --------
+          // -------- crear turno (UNA SOLA VEZ) --------
+final nombreFinal = nombreCtrl.text.trim();
+final edadFinal = int.tryParse(edadCtrl.text.trim()) ?? 0;
+final telFinal = telCtrl.text.trim();
+
+await _crearTurno(
+  nombreFinal,
+  edadFinal,
+  telFinal,
+  requireApellido: selectedCliente == null,
+);
+
+          _dialogAlive = false;
+          _localDebounce?.cancel();
+          if (mounted) Navigator.pop(context);
+        } finally {
+          if (_dialogAlive) {
+            setLocal(() => isSubmitting = false);
+          }
+        }
+      },
+
+
+
+
+
+
+
+
+                            
+                            child: isSubmitting
+    ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      )
+    : const Text(
+        "Agregar",
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
                           ),
                         ),
                       ],

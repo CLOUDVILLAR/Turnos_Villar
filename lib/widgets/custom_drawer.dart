@@ -228,7 +228,7 @@ class CustomDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Text(
-                "Óptica Villar 1.0.2",
+                "Óptica Villar 1.0.3",
                 style: TextStyle(
                   color: Colors.black.withOpacity(0.35),
                   fontWeight: FontWeight.w700,

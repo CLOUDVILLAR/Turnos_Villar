@@ -31,6 +31,9 @@ dependencies:
   http: ^1.1.0
   web_socket_channel: ^2.4.0 
   shared_preferences: ^2.2.3
+  excel: ^4.0.6
+  file_saver: ^0.2.14
+  file_selector: ^1.0.3
   flutter:
     sdk: flutter
   

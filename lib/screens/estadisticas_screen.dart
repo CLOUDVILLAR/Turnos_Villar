@@ -6,6 +6,12 @@ import 'package:http/http.dart' as http;
 import '../utils/ip.dart';
 import '../widgets/custom_drawer.dart';
 
+import 'package:excel/excel.dart' as ex;
+import 'package:file_saver/file_saver.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 class EstadisticasScreen extends StatefulWidget {
   final int sucursalId;
   final String sucursalNombre;
@@ -35,6 +41,170 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   double avgAtencion = 0;
 
   List<Map<String, dynamic>> clientes = [];
+
+  Map<String, int> get conteoPorEdad {
+  final counts = {
+    '1-4': 0,
+    '5-14': 0,
+    '15-64': 0,
+    '>64': 0,
+  };
+
+  for (final c in clientes) {
+    final edad = int.tryParse((c['edad'] ?? '').toString());
+    if (edad == null) continue;
+
+    if (edad >= 1 && edad <= 4) {
+      counts['1-4'] = counts['1-4']! + 1;
+    } else if (edad >= 5 && edad <= 14) {
+      counts['5-14'] = counts['5-14']! + 1;
+    } else if (edad >= 15 && edad <= 64) {
+      counts['15-64'] = counts['15-64']! + 1;
+    } else if (edad > 64) {
+      counts['>64'] = counts['>64']! + 1;
+    }
+  }
+
+  return counts;
+}
+
+Future<void> _exportarExcel() async {
+  final data = conteoPorEdad;
+  final excel = ex.Excel.createExcel();
+  final sheet = excel['Resumen'];
+
+  final encoded = excel.encode();
+
+  final titleStyle = ex.CellStyle(
+    bold: true,
+    fontSize: 20,
+    fontColorHex: ex.ExcelColor.white,
+    backgroundColorHex: ex.ExcelColor.orange,
+    horizontalAlign: ex.HorizontalAlign.Center,
+    verticalAlign: ex.VerticalAlign.Center,
+  );
+
+  final headerStyle = ex.CellStyle(
+    bold: true,
+    fontSize: 12,
+    fontColorHex: ex.ExcelColor.white,
+    backgroundColorHex: ex.ExcelColor.fromHexString('#F97316'),
+    horizontalAlign: ex.HorizontalAlign.Center,
+    verticalAlign: ex.VerticalAlign.Center,
+  );
+
+  final valueStyle = ex.CellStyle(
+    bold: true,
+    fontSize: 14,
+    fontColorHex: ex.ExcelColor.fromHexString('#111827'),
+    backgroundColorHex: ex.ExcelColor.fromHexString('#FFF7ED'),
+    horizontalAlign: ex.HorizontalAlign.Center,
+    verticalAlign: ex.VerticalAlign.Center,
+  );
+
+  final subtitleStyle = ex.CellStyle(
+    bold: true,
+    fontSize: 11,
+    fontColorHex: ex.ExcelColor.fromHexString('#7C2D12'),
+    backgroundColorHex: ex.ExcelColor.fromHexString('#FFEDD5'),
+    horizontalAlign: ex.HorizontalAlign.Center,
+    verticalAlign: ex.VerticalAlign.Center,
+  );
+
+  sheet.merge(
+    ex.CellIndex.indexByString('A1'),
+    ex.CellIndex.indexByString('E1'),
+  );
+
+  final titleCell = sheet.cell(ex.CellIndex.indexByString('A1'));
+  titleCell.value = ex.TextCellValue('CLIENTES ATENDIDOS');
+  titleCell.cellStyle = titleStyle;
+
+  sheet.merge(
+    ex.CellIndex.indexByString('A2'),
+    ex.CellIndex.indexByString('E2'),
+  );
+
+  final rangeCell = sheet.cell(ex.CellIndex.indexByString('A2'));
+  rangeCell.value = ex.TextCellValue(
+    'Rango: ${_fmtDateUi(_startDate)} - ${_fmtDateUi(_endDate)}',
+  );
+  rangeCell.cellStyle = subtitleStyle;
+
+  sheet.appendRow([
+    ex.TextCellValue('Total atendido'),
+    ex.TextCellValue('1 - 4 años'),
+    ex.TextCellValue('5 - 14 años'),
+    ex.TextCellValue('15 - 64 años'),
+    ex.TextCellValue('Mayor a 64'),
+  ]);
+
+  sheet.appendRow([
+    ex.IntCellValue(totalAtendidos),
+    ex.IntCellValue(data['1-4'] ?? 0),
+    ex.IntCellValue(data['5-14'] ?? 0),
+    ex.IntCellValue(data['15-64'] ?? 0),
+    ex.IntCellValue(data['>64'] ?? 0),
+  ]);
+
+  for (final cell in ['A3', 'B3', 'C3', 'D3', 'E3']) {
+    sheet.cell(ex.CellIndex.indexByString(cell)).cellStyle = headerStyle;
+  }
+
+  for (final cell in ['A4', 'B4', 'C4', 'D4', 'E4']) {
+    sheet.cell(ex.CellIndex.indexByString(cell)).cellStyle = valueStyle;
+  }
+
+  sheet.setColumnWidth(0, 22);
+  sheet.setColumnWidth(1, 18);
+  sheet.setColumnWidth(2, 18);
+  sheet.setColumnWidth(3, 18);
+  sheet.setColumnWidth(4, 18);
+
+  excel.delete('Sheet1');
+
+  final bytesRaw = excel.encode();
+  if (bytesRaw == null) {
+    _toast('No se pudo generar el Excel');
+    return;
+  }
+
+  final bytes = Uint8List.fromList(bytesRaw);
+
+  final fileName =
+      'estadisticas_${widget.sucursalNombre}_${_fmtDateApi(_startDate)}_${_fmtDateApi(_endDate)}';
+
+  if (kIsWeb) {
+    await FileSaver.instance.saveFile(
+      name: fileName,
+      bytes: bytes,
+      ext: 'xlsx',
+      mimeType: MimeType.microsoftExcel,
+    );
+  } else {
+    final location = await getSaveLocation(
+      suggestedName: '$fileName.xlsx',
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      ],
+    );
+
+    if (location == null) return;
+
+    final file = XFile.fromData(
+      bytes,
+      name: '$fileName.xlsx',
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+
+    await file.saveTo(location.path);
+  }
+
+  _toast('Excel exportado');
+}
+
+
 
   @override
   void initState() {
@@ -232,6 +402,71 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   // UI
   // ==========================
 
+
+  Widget _edadRangeTable() {
+  final data = conteoPorEdad;
+
+  Widget cell(String title, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black12),
+          color: Colors.white,
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 22,
+                color: brandRed,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        "Personas por rango de edad",
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 14,
+          color: Colors.black87,
+        ),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          cell("1 - 4", "${data['1-4']}"),
+          const SizedBox(width: 8),
+          cell("5 - 14", "${data['5-14']}"),
+          const SizedBox(width: 8),
+          cell("15 - 64", "${data['15-64']}"),
+          const SizedBox(width: 8),
+          cell("> 64", "${data['>64']}"),
+        ],
+      ),
+    ],
+  );
+}
+
   Widget _kpi(String title, String value) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -396,15 +631,28 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 ),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _loading ? null : _pickRangeTwoSteps,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: brandRed,
-                          side: const BorderSide(color: brandRed),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        icon: const Icon(Icons.tune),
-                        label: const Text("Filtro"),
-                      ),
+  onPressed: _loading ? null : _pickRangeTwoSteps,
+  style: OutlinedButton.styleFrom(
+    foregroundColor: brandRed,
+    side: const BorderSide(color: brandRed),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  ),
+  icon: const Icon(Icons.tune),
+  label: const Text("Filtro"),
+),
+
+const SizedBox(width: 8),
+
+ElevatedButton.icon(
+  onPressed: _loading ? null : _exportarExcel,
+  style: ElevatedButton.styleFrom(
+    backgroundColor: brandRed,
+    foregroundColor: Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  ),
+  icon: const Icon(Icons.download),
+  label: const Text("Exportar"),
+),
                     ],
                   ),
 
@@ -422,6 +670,8 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   ),
 
                   const SizedBox(height: 14),
+
+                  _edadRangeTable(),
 
                   Row(
                     children: [

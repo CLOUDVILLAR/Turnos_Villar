@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/ip.dart';
 import 'empleado_screen.dart';
+import 'admin_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,37 +32,53 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _restoreSession() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final id = prefs.getInt('sucursalId');
-      final nombre = prefs.getString('sucursalNombre');
-
-      if (!mounted) return;
-
-      if (id != null && nombre != null && nombre.isNotEmpty) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EmpleadoScreen(
-              sucursalId: id,
-              sucursalNombre: nombre,
-            ),
-          ),
-        );
-        return;
-      }
-    } catch (_) {
-      // si falla, mostramos login normal
-    } finally {
-      if (mounted) setState(() => _checkingSession = false);
-    }
-  }
-
-  Future<void> _saveSession({required int sucursalId, required String sucursalNombre}) async {
+  try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('sucursalId', sucursalId);
-    await prefs.setString('sucursalNombre', sucursalNombre);
+    final id = prefs.getInt('sucursalId');
+    final nombre = prefs.getString('sucursalNombre');
+    final rol = prefs.getString('rol') ?? 'sucursal';
+
+    if (!mounted) return;
+
+    if (rol == 'admin') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AdminScreen(),
+        ),
+      );
+      return;
+    }
+
+    if (id != null && nombre != null && nombre.isNotEmpty) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmpleadoScreen(
+            sucursalId: id,
+            sucursalNombre: nombre,
+          ),
+        ),
+      );
+      return;
+    }
+  } catch (_) {
+    // si falla, mostramos login normal
+  } finally {
+    if (mounted) setState(() => _checkingSession = false);
   }
+}
+
+  Future<void> _saveSession({
+  required int sucursalId,
+  required String sucursalNombre,
+  required String rol,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt('sucursalId', sucursalId);
+  await prefs.setString('sucursalNombre', sucursalNombre);
+  await prefs.setString('rol', rol);
+}
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -95,24 +112,43 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final int id = data['id'];
-        final String nombre = data['nombre'];
+  final data = jsonDecode(res.body);
 
-        await _saveSession(sucursalId: id, sucursalNombre: nombre);
+  final int id = data['id'];
+  final String nombre = data['nombre'];
+  final String rol = data['rol'] ?? 'sucursal';
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EmpleadoScreen(
-              sucursalId: id,
-              sucursalNombre: nombre,
-            ),
-          ),
-        );
-      } else {
-        _toast("Credenciales incorrectas");
-      }
+  final bool isAdmin = data['is_admin'] == true || rol == 'admin';
+
+  await _saveSession(
+    sucursalId: id,
+    sucursalNombre: nombre,
+    rol: rol,
+  );
+
+  if (!mounted) return;
+
+  if (isAdmin) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AdminScreen(),
+      ),
+    );
+  } else {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EmpleadoScreen(
+          sucursalId: id,
+          sucursalNombre: nombre,
+        ),
+      ),
+    );
+  }
+} else {
+  _toast("Credenciales incorrectas");
+}
     } catch (_) {
       if (!mounted) return;
       _toast("Error de conexión");

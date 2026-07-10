@@ -49,6 +49,11 @@ app.*.map.json
 Villar_powerbi.pem
 
 API/.env
+API/venv/
+API/__pycache__/
+API/routers/__pycache__/
+API/services/__pycache__/
+API/utils/__pycache__/
 
 .env
 

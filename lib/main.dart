@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'utils/ip.dart';
+import 'widgets/staging_badge.dart';
 
 
 void main() {
@@ -25,11 +26,15 @@ class MyApp extends StatelessWidget {
       },
       builder: (context, child) {
         if (child == null || !isStaging) return child ?? const SizedBox.shrink();
-        return Banner(
-          message: 'AMBIENTE DE PRUEBA',
-          location: BannerLocation.topEnd,
-          color: Colors.redAccent,
-          child: child,
+        return Stack(
+          children: [
+            child,
+            const Positioned(
+              top: 12,
+              left: 12,
+              child: SafeArea(child: StagingBadge()),
+            ),
+          ],
         );
       },
     );

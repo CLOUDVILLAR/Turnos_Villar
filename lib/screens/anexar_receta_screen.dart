@@ -4,12 +4,47 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import '../utils/ip.dart';
 import '../widgets/custom_drawer.dart';
 
 const Color _brandRed = Color(0xFFE5361B);
+
+/// Las recetas se guardan en formato 4:3 (o 3:4 si la foto es vertical):
+/// recorta al centro la mayor porción posible con esa proporción.
+Uint8List _recortarA43(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return bytes;
+
+  final w = decoded.width;
+  final h = decoded.height;
+  final esVertical = h >= w;
+
+  int targetW, targetH;
+  if (esVertical) {
+    targetW = w;
+    targetH = (w * 4 / 3).round();
+    if (targetH > h) {
+      targetH = h;
+      targetW = (h * 3 / 4).round();
+    }
+  } else {
+    targetH = h;
+    targetW = (h * 4 / 3).round();
+    if (targetW > w) {
+      targetW = w;
+      targetH = (w * 3 / 4).round();
+    }
+  }
+
+  final x = ((w - targetW) / 2).round();
+  final y = ((h - targetH) / 2).round();
+
+  final recortada = img.copyCrop(decoded, x: x, y: y, width: targetW, height: targetH);
+  return Uint8List.fromList(img.encodeJpg(recortada, quality: 90));
+}
 
 class AnexarRecetaScreen extends StatefulWidget {
   final int sucursalId;
@@ -231,10 +266,13 @@ class _RecetaDialogState extends State<_RecetaDialog> {
 
   Uint8List? _fotoBytes;
   String? _fotoNombre;
+  double _fotoAspectRatio = 4 / 3;
+  bool _procesandoFoto = false;
   bool _subiendo = false;
   String? _error;
 
   Future<void> _tomarFoto(ImageSource source) async {
+    setState(() => _procesandoFoto = true);
     try {
       final XFile? foto = await _picker.pickImage(
         source: source,
@@ -243,14 +281,20 @@ class _RecetaDialogState extends State<_RecetaDialog> {
       );
       if (foto == null) return;
 
-      final bytes = await foto.readAsBytes();
+      final original = await foto.readAsBytes();
+      final recortada = _recortarA43(original);
+      final decoded = img.decodeImage(recortada);
+
       setState(() {
-        _fotoBytes = bytes;
+        _fotoBytes = recortada;
         _fotoNombre = foto.name;
+        _fotoAspectRatio = decoded != null ? decoded.width / decoded.height : 4 / 3;
         _error = null;
       });
     } catch (e) {
       setState(() => _error = 'No se pudo abrir la cámara/galería: $e');
+    } finally {
+      if (mounted) setState(() => _procesandoFoto = false);
     }
   }
 
@@ -293,7 +337,10 @@ class _RecetaDialogState extends State<_RecetaDialog> {
     if (_fotoBytes != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.memory(_fotoBytes!, height: 200, fit: BoxFit.cover, width: double.infinity),
+        child: AspectRatio(
+          aspectRatio: _fotoAspectRatio,
+          child: Image.memory(_fotoBytes!, fit: BoxFit.cover, width: double.infinity),
+        ),
       );
     }
     return Container(
@@ -353,15 +400,26 @@ class _RecetaDialogState extends State<_RecetaDialog> {
                     style: const TextStyle(color: Colors.black54),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 4),
+                const Text(
+                  'La foto se recorta automáticamente a formato 4:3',
+                  style: TextStyle(color: Colors.black45, fontSize: 11),
+                ),
+                const SizedBox(height: 8),
                 _previewFoto(),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _subiendo ? null : () => _tomarFoto(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt, size: 20),
+                        onPressed: (_subiendo || _procesandoFoto) ? null : () => _tomarFoto(ImageSource.camera),
+                        icon: _procesandoFoto
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.camera_alt, size: 20),
                         label: Text(_fotoBytes == null ? 'Tomar foto' : 'Repetir'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _brandRed,
@@ -372,7 +430,7 @@ class _RecetaDialogState extends State<_RecetaDialog> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _subiendo ? null : () => _tomarFoto(ImageSource.gallery),
+                        onPressed: (_subiendo || _procesandoFoto) ? null : () => _tomarFoto(ImageSource.gallery),
                         icon: const Icon(Icons.photo_library_outlined, size: 20),
                         label: const Text('Galería'),
                       ),

@@ -114097,8 +114097,8 @@ $1(a){var s=this
 return new A.r3(new A.ayx(s.a,s.b,s.c,s.d,s.e,s.f,s.r,s.w),null)},
 $S:610}
 A.ayx.prototype={
-$2(a,b){var s=this,r=null,q=s.c,p=A.aV(q?"Editar usuario":"Nuevo usuario",r,r,r,r,r,r,r,r),o=s.d,n=A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),o,r,r,r,r,r,2,B.RK,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),m=s.e,l=A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),m,r,r,r,r,r,2,B.RM,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),k=s.f,j=s.r,i=s.a,h=t.p
-l=A.zW(A.ch(A.b([n,l,A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),k,r,r,r,r,r,2,A.yB(r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,q?"Nueva contrase\xf1a (opcional)":"Contrase\xf1a",!0,!0,r,r,r,r,r,r,r,r,r,r,r,r,r,r),B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!0,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),j,r,r,r,r,r,2,B.RJ,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),B.aV,A.b5Z(B.RN,B.VZ,new A.ayu(i,b),i.a,t.N)],h),B.B,B.p,B.aq),r,B.V,r,r,B.al)
+$2(a,b){var s=this,r=null,q=s.c,p=A.aV(q?"Editar usuario":"Nuevo usuario",r,r,r,r,r,r,r,r),o=s.d,n=A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),o,r,r,r,r,r,2,B.RL,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),m=s.e,l=A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),m,r,r,r,r,r,2,B.RM,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),k=s.f,j=s.r,i=s.a,h=t.p
+l=A.zW(A.ch(A.b([n,l,A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),k,r,r,r,r,r,2,A.yB(r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,q?"Nueva contrase\xf1a (opcional)":"Contrase\xf1a",!0,!0,r,r,r,r,r,r,r,r,r,r,r,r,r,r),B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!0,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),j,r,r,r,r,r,2,B.RK,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,r,r,r),B.aV,A.b5Z(B.RN,B.VZ,new A.ayu(i,b),i.a,t.N)],h),B.B,B.p,B.aq),r,B.V,r,r,B.al)
 return A.t3(A.b([A.ih(!1,B.fw,r,r,r,r,r,r,new A.ayv(a),r,r),A.aUr(!1,B.adr,B.n,r,r,r,r,r,new A.ayw(i,s.b,o,m,k,j,q,s.w,a),r,A.aPh(B.o,r,r))],h),r,l,r,r,p)},
 $S:611}
 A.ayu.prototype={
@@ -114260,7 +114260,7 @@ return A.H(A.nw(null,null,!0,null,new A.ayH(q,a),p,null,!0,t.y),$async$BD)
 case 2:if(c===!0){q.aeV("Receta anexada correctamente \u2705")
 q.a2(new A.ayI(q))}return A.L(null,r)}})
 return A.M($async$BD,r)},
-afO(){var s=this,r=null,q=A.dy(A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),s.d,r,r,r,r,r,2,B.RL,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,new A.ayJ(s),r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,B.EC,r,r),1),p=s.e?r:s.gafP(),o=A.lb(r,r,B.o,r,r,r,r,r,r,B.h,r,r,r,r,r,r,r,r,r,r),n=t.p
+afO(){var s=this,r=null,q=A.dy(A.n7(r,B.bI,!1,r,!0,B.J,r,A.pk(),s.d,r,r,r,r,r,2,B.RJ,B.V,!0,r,!0,r,!1,r,B.br,r,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,new A.ayJ(s),r,!1,r,r,!1,r,!0,r,B.c3,r,r,r,r,r,r,r,r,r,r,r,r,!0,B.au,r,B.cc,r,B.EC,r,r),1),p=s.e?r:s.gafP(),o=A.lb(r,r,B.o,r,r,r,r,r,r,B.h,r,r,r,r,r,r,r,r,r,r),n=t.p
 return A.ch(A.b([B.ada,B.fs,A.cs(A.b([q,B.bX,A.pR(!1,s.e?B.E3:B.Rh,r,r,r,r,r,r,p,r,o)],n),B.B,B.p,B.x,0)],n),B.ab,B.p,B.x)},
 apt(){if(J.iA(this.r))return B.aC
 var s=A.b([B.ep,B.adk,B.fs],t.p)
@@ -122050,11 +122050,11 @@ B.jd=new A.my(B.rU,!0,2,"animatedGif")
 B.b3=s([],t.oU)
 B.RH=new A.o9("\ufffc",null,null,null,!0,!0,B.b3)
 B.RI=new A.yC(null,null,null,null,null,null,null,null,null,B.rn,B.pJ,!1,null,!1,null,null,null,null,null,null,null,null,!1,null,null,null,null,null,null,null,null,null,null,null,!1,null,null)
-B.RJ=new A.mB(null,null,null,"Doctor / descripci\xf3n (opcional)",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
-B.RK=new A.mB(null,null,null,"Nombre",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
 B.po=new A.bh(B.r,1,B.q,-1)
 B.zg=new A.fj(4,B.fN,B.po)
-B.RL=new A.mB(null,null,null,null,null,null,null,null,null,null,"N\xfamero de orden (ej. KBS-52628 o 52628)",null,null,null,null,null,!0,!0,null,null,null,null,null,null,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,B.zg,!0,null,null,null,null)
+B.RJ=new A.mB(null,null,null,null,null,null,null,null,null,null,"N\xfamero de orden (ej. S-52628 o 52628)",null,null,null,null,null,!0,!0,null,null,null,null,null,null,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,B.zg,!0,null,null,null,null)
+B.RK=new A.mB(null,null,null,"Doctor / descripci\xf3n (opcional)",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
+B.RL=new A.mB(null,null,null,"Nombre",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
 B.RM=new A.mB(null,null,null,"Usuario",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
 B.RN=new A.mB(null,null,null,"Rol",null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
 B.ahm=new A.mB(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,!0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,!0,null,null,null,null)
@@ -123996,7 +123996,7 @@ B.a3C=new A.zh(4,"unknown")
 B.a3D=new A.H1(null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.a6P=new A.Y4(null)
 B.a4o=new A.HV(!0,!0,B.a9,B.a6P,null)
-B.a3E=new A.qE(12,12,null,null,null,null,B.a4o,null)
+B.a3E=new A.qE(null,null,12,12,null,null,B.a4o,null)
 B.a3F=new A.zn(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.a3K=new A.Hb(null,null,null,null,null,null,null,null,null)
 B.D2=new A.aX(1,1)

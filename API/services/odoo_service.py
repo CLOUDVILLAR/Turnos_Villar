@@ -237,7 +237,7 @@ class OdooClient:
 
     def search_orders(self, q: str, limit: int = 15) -> List[Dict[str, Any]]:
         """
-        Busca sale.order por numero de orden (campo 'name', ej. 'KBS-52628').
+        Busca sale.order por numero de orden (campo 'name', ej. 'S-52628').
         """
         uid = self.authenticate()
 

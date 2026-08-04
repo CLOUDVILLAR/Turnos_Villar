@@ -22,7 +22,7 @@ class OrdenOut(BaseModel):
 
 @router.get("/ordenes/buscar", response_model=List[OrdenOut])
 async def buscar_ordenes(
-    q: str = Query(..., min_length=2, description="Numero de orden (ej. KBS-52628 o 52628)"),
+    q: str = Query(..., min_length=2, description="Numero de orden (ej. S-52628 o 52628)"),
     limit: int = Query(15, ge=1, le=25),
 ):
     try:

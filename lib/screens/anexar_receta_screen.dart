@@ -150,7 +150,7 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
               child: TextField(
                 controller: _buscarController,
                 decoration: const InputDecoration(
-                  hintText: 'Número de orden (ej. KBS-52628 o 52628)',
+                  hintText: 'Número de orden (ej. S-52628 o 52628)',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),

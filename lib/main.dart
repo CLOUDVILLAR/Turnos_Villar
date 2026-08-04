@@ -30,8 +30,8 @@ class MyApp extends StatelessWidget {
           children: [
             child,
             const Positioned(
-              top: 12,
-              left: 12,
+              bottom: 12,
+              right: 12,
               child: SafeArea(child: StagingBadge()),
             ),
           ],

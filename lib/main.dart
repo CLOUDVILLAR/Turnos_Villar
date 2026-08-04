@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
+import 'utils/ip.dart';
 
 
 void main() {
@@ -21,6 +22,15 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
+      },
+      builder: (context, child) {
+        if (child == null || !isStaging) return child ?? const SizedBox.shrink();
+        return Banner(
+          message: 'AMBIENTE DE PRUEBA',
+          location: BannerLocation.topEnd,
+          color: Colors.redAccent,
+          child: child,
+        );
       },
     );
   }

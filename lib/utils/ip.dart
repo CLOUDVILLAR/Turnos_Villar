@@ -1,3 +1,5 @@
+final bool isStaging = Uri.base.host == '18.118.99.60' && Uri.base.port == 8103;
+
 String _resolveBaseUrl() {
   final uri = Uri.base;
   final host = uri.host;

@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import '../utils/ip.dart';
 import '../widgets/custom_drawer.dart';
 
+const Color _brandRed = Color(0xFFE5361B);
+
 class AnexarRecetaScreen extends StatefulWidget {
   final int sucursalId;
   final String sucursalNombre;
@@ -24,20 +26,11 @@ class AnexarRecetaScreen extends StatefulWidget {
 }
 
 class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
-  static const Color brandRed = Color(0xFFE5361B);
-
   final _buscarController = TextEditingController();
-  final _picker = ImagePicker();
 
   bool _buscando = false;
-  bool _subiendo = false;
   String? _error;
-
   List<Map<String, dynamic>> _resultados = [];
-  Map<String, dynamic>? _ordenSeleccionada;
-
-  Uint8List? _fotoBytes;
-  String? _fotoNombre;
 
   @override
   void dispose() {
@@ -63,9 +56,6 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
       _buscando = true;
       _error = null;
       _resultados = [];
-      _ordenSeleccionada = null;
-      _fotoBytes = null;
-      _fotoNombre = null;
     });
 
     try {
@@ -91,92 +81,22 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
     }
   }
 
-  void _seleccionarOrden(Map<String, dynamic> orden) {
-    setState(() {
-      _ordenSeleccionada = orden;
-      _fotoBytes = null;
-      _fotoNombre = null;
-      _error = null;
-    });
-  }
+  Future<void> _abrirPopupOrden(Map<String, dynamic> orden) async {
+    final subido = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _RecetaDialog(
+        orden: orden,
+        sucursalNombre: widget.sucursalNombre,
+      ),
+    );
 
-  Future<void> _tomarFoto() async {
-    try {
-      final XFile? foto = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1920,
-        imageQuality: 85,
-      );
-      if (foto == null) return;
-
-      final bytes = await foto.readAsBytes();
-      setState(() {
-        _fotoBytes = bytes;
-        _fotoNombre = foto.name;
-      });
-    } catch (e) {
-      _toast('No se pudo abrir la cámara: $e');
-    }
-  }
-
-  Future<void> _elegirDeGaleria() async {
-    try {
-      final XFile? foto = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        imageQuality: 85,
-      );
-      if (foto == null) return;
-
-      final bytes = await foto.readAsBytes();
-      setState(() {
-        _fotoBytes = bytes;
-        _fotoNombre = foto.name;
-      });
-    } catch (e) {
-      _toast('No se pudo abrir la galería: $e');
-    }
-  }
-
-  Future<void> _subirReceta() async {
-    if (_ordenSeleccionada == null || _fotoBytes == null) return;
-
-    setState(() {
-      _subiendo = true;
-      _error = null;
-    });
-
-    try {
-      final orderId = _ordenSeleccionada!['id'];
-      final uri = Uri.parse('$baseUrl/odoo/ordenes/$orderId/anexar-receta');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['sucursal_nombre'] = widget.sucursalNombre
-        ..files.add(http.MultipartFile.fromBytes(
-          'foto',
-          _fotoBytes!,
-          filename: _fotoNombre ?? 'receta.jpg',
-          contentType: MediaType('image', 'jpeg'),
-        ));
-
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-
-      if (res.statusCode != 200) {
-        throw Exception('Error del servidor (${res.statusCode}): ${res.body}');
-      }
-
+    if (subido == true) {
       _toast('Receta anexada correctamente ✅');
       setState(() {
-        _ordenSeleccionada = null;
-        _fotoBytes = null;
-        _fotoNombre = null;
         _resultados = [];
         _buscarController.clear();
       });
-    } catch (e) {
-      setState(() => _error = 'No se pudo subir la receta: $e');
-    } finally {
-      if (mounted) setState(() => _subiendo = false);
     }
   }
 
@@ -207,7 +127,7 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
             ElevatedButton(
               onPressed: _buscando ? null : _buscarOrdenes,
               style: ElevatedButton.styleFrom(
-                backgroundColor: brandRed,
+                backgroundColor: _brandRed,
                 foregroundColor: Colors.white,
               ),
               child: _buscando
@@ -231,92 +151,28 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
       children: [
         const SizedBox(height: 14),
         const Text(
-          'Resultados',
+          'Resultados · toca una orden para anexar la receta',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
         ),
         const SizedBox(height: 8),
         ..._resultados.map((o) {
-          final seleccionada = _ordenSeleccionada != null && _ordenSeleccionada!['id'] == o['id'];
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: seleccionada ? brandRed : Colors.black12,
-                width: seleccionada ? 2 : 1,
-              ),
+              side: const BorderSide(color: Colors.black12),
             ),
             child: ListTile(
-              leading: Icon(Icons.receipt_long, color: seleccionada ? brandRed : Colors.black45),
+              leading: const Icon(Icons.receipt_long, color: Colors.black45),
               title: Text(o['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
               subtitle: Text(
                 '${o['partner_nombre'] ?? 'Sin cliente'} · ${o['state'] ?? ''}',
               ),
-              trailing: seleccionada ? const Icon(Icons.check_circle, color: brandRed) : null,
-              onTap: () => _seleccionarOrden(o),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _abrirPopupOrden(o),
             ),
           );
         }),
-      ],
-    );
-  }
-
-  Widget _panelFoto() {
-    if (_ordenSeleccionada == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-        const Divider(),
-        const SizedBox(height: 8),
-        Text(
-          'Orden seleccionada: ${_ordenSeleccionada!['name']}',
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-        ),
-        const SizedBox(height: 12),
-        if (_fotoBytes != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.memory(_fotoBytes!, height: 220, fit: BoxFit.cover, width: double.infinity),
-          ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            ElevatedButton.icon(
-              onPressed: _tomarFoto,
-              icon: const Icon(Icons.camera_alt),
-              label: Text(_fotoBytes == null ? 'Tomar foto' : 'Tomar otra foto'),
-              style: ElevatedButton.styleFrom(backgroundColor: brandRed, foregroundColor: Colors.white),
-            ),
-            OutlinedButton.icon(
-              onPressed: _elegirDeGaleria,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('Elegir de galería'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: (_fotoBytes != null && !_subiendo) ? _subirReceta : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            child: _subiendo
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Anexar receta a la orden', style: TextStyle(fontWeight: FontWeight.w800)),
-          ),
-        ),
       ],
     );
   }
@@ -326,7 +182,7 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: brandRed,
+        backgroundColor: _brandRed,
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text('${widget.sucursalNombre} • Anexar receta'),
@@ -348,8 +204,206 @@ class _AnexarRecetaScreenState extends State<AnexarRecetaScreen> {
                 Text(_error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
               ],
               _listaResultados(),
-              _panelFoto(),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Popup que se abre al elegir una orden: cámara/galería + subida de la receta.
+class _RecetaDialog extends StatefulWidget {
+  final Map<String, dynamic> orden;
+  final String sucursalNombre;
+
+  const _RecetaDialog({
+    required this.orden,
+    required this.sucursalNombre,
+  });
+
+  @override
+  State<_RecetaDialog> createState() => _RecetaDialogState();
+}
+
+class _RecetaDialogState extends State<_RecetaDialog> {
+  final _picker = ImagePicker();
+
+  Uint8List? _fotoBytes;
+  String? _fotoNombre;
+  bool _subiendo = false;
+  String? _error;
+
+  Future<void> _tomarFoto(ImageSource source) async {
+    try {
+      final XFile? foto = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        imageQuality: 85,
+      );
+      if (foto == null) return;
+
+      final bytes = await foto.readAsBytes();
+      setState(() {
+        _fotoBytes = bytes;
+        _fotoNombre = foto.name;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() => _error = 'No se pudo abrir la cámara/galería: $e');
+    }
+  }
+
+  Future<void> _subirReceta() async {
+    if (_fotoBytes == null) return;
+
+    setState(() {
+      _subiendo = true;
+      _error = null;
+    });
+
+    try {
+      final orderId = widget.orden['id'];
+      final uri = Uri.parse('$baseUrl/odoo/ordenes/$orderId/anexar-receta');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['sucursal_nombre'] = widget.sucursalNombre
+        ..files.add(http.MultipartFile.fromBytes(
+          'foto',
+          _fotoBytes!,
+          filename: _fotoNombre ?? 'receta.jpg',
+          contentType: MediaType('image', 'jpeg'),
+        ));
+
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+
+      if (res.statusCode != 200) {
+        throw Exception('Error del servidor (${res.statusCode}): ${res.body}');
+      }
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      setState(() => _error = 'No se pudo subir la receta: $e');
+    } finally {
+      if (mounted) setState(() => _subiendo = false);
+    }
+  }
+
+  Widget _previewFoto() {
+    if (_fotoBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(_fotoBytes!, height: 200, fit: BoxFit.cover, width: double.infinity),
+      );
+    }
+    return Container(
+      height: 140,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black12, style: BorderStyle.solid),
+      ),
+      alignment: Alignment.center,
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.image_outlined, color: Colors.black38, size: 32),
+          SizedBox(height: 6),
+          Text('Sin foto todavía', style: TextStyle(color: Colors.black45)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.receipt_long, color: _brandRed),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.orden['name'] ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: _subiendo ? null : () => Navigator.of(context).pop(false),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 32),
+                  child: Text(
+                    '${widget.orden['partner_nombre'] ?? 'Sin cliente'} · ${widget.orden['state'] ?? ''}',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _previewFoto(),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _subiendo ? null : () => _tomarFoto(ImageSource.camera),
+                        icon: const Icon(Icons.camera_alt, size: 20),
+                        label: Text(_fotoBytes == null ? 'Tomar foto' : 'Repetir'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _brandRed,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _subiendo ? null : () => _tomarFoto(ImageSource.gallery),
+                        icon: const Icon(Icons.photo_library_outlined, size: 20),
+                        label: const Text('Galería'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: (_fotoBytes != null && !_subiendo) ? _subirReceta : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _subiendo
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Anexar receta a la orden', style: TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

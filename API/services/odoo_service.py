@@ -235,6 +235,78 @@ class OdooClient:
         return self._normalize_partner(out)
 
 
+    def search_orders(self, q: str, limit: int = 15) -> List[Dict[str, Any]]:
+        """
+        Busca sale.order por numero de orden (campo 'name', ej. 'KBS-52628').
+        """
+        uid = self.authenticate()
+
+        q = (q or "").strip()
+        if len(q) < 2:
+            return []
+
+        domain = [["name", "ilike", q]]
+        fields = ["id", "name", "partner_id", "state", "date_order"]
+
+        try:
+            orders = self.models.execute_kw(
+                self.db, uid, self.password,
+                "sale.order", "search_read",
+                [domain],
+                {"fields": fields, "limit": int(limit), "order": "id desc"}
+            )
+            return orders or []
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault buscando ordenes: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error buscando ordenes: {repr(e)}")
+
+    def attach_prescription(
+        self,
+        order_id: int,
+        filename: str,
+        datas_b64: str,
+        mimetype: str,
+        nota: str,
+    ) -> int:
+        """
+        Crea un ir.attachment ligado a la sale.order y lo publica en su chatter
+        via message_post (queda visible en el "Chatter" de Odoo para el equipo).
+        """
+        uid = self.authenticate()
+
+        try:
+            attachment_id = self.models.execute_kw(
+                self.db, uid, self.password,
+                "ir.attachment", "create",
+                [{
+                    "name": filename,
+                    "type": "binary",
+                    "datas": datas_b64,
+                    "res_model": "sale.order",
+                    "res_id": int(order_id),
+                    "mimetype": mimetype,
+                }]
+            )
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault creando adjunto: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error creando adjunto: {repr(e)}")
+
+        try:
+            self.models.execute_kw(
+                self.db, uid, self.password,
+                "sale.order", "message_post",
+                [[int(order_id)]],
+                {"body": nota, "attachment_ids": [attachment_id]}
+            )
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault publicando en el chatter: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error publicando en el chatter: {repr(e)}")
+
+        return int(attachment_id)
+
     def update_partner_phone(self, partner_id: int, telefono: Optional[str]) -> Dict[str, Any]:
         uid = self.authenticate()
 

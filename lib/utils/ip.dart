@@ -7,6 +7,10 @@ String _resolveBaseUrl() {
   }
 
   if (host == '18.118.99.60') {
+    // Web de staging (puerto 8103) habla con la API de staging (8102).
+    if (uri.port == 8103) {
+      return 'http://18.118.99.60:8102';
+    }
     return 'http://18.118.99.60:8002';
   }
 

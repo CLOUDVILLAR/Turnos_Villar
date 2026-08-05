@@ -407,29 +407,23 @@ bool telefonoEstaCompleto(String input) {
   return d.length >= 8;
 }
 
-/// Formatea en vivo el teléfono como `+` seguido de los dígitos agrupados
-/// de a 3 con guiones (ej. +1-809-555-1234). No asume ni fuerza el patrón
-/// de ningún país específico: solo garantiza el "+" inicial y los guiones.
+/// No reagrupa los dígitos por su cuenta (eso rompía números al mezclar el
+/// código de país con el resto). Solo garantiza el "+" inicial y deja que
+/// el empleado escriba libremente espacios y guiones donde quiera.
 class _PhoneInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    var digits = _soloDigitos(newValue.text);
-    if (digits.length > 15) digits = digits.substring(0, 15);
+    var texto = newValue.text.replaceAll(RegExp(r'[^\d\+\-\s]'), '');
 
-    if (digits.isEmpty) {
-      return const TextEditingValue(text: '');
-    }
+    final tieneDigitos = RegExp(r'\d').hasMatch(texto);
+    final resto = texto.replaceAll('+', '');
+    texto = tieneDigitos ? '+$resto' : resto;
 
-    final buf = StringBuffer('+');
-    for (var i = 0; i < digits.length; i += 3) {
-      if (i > 0) buf.write('-');
-      buf.write(digits.substring(i, min(i + 3, digits.length)));
-    }
+    if (texto.length > 20) texto = texto.substring(0, 20);
 
-    final texto = buf.toString();
     return TextEditingValue(
       text: texto,
       selection: TextSelection.collapsed(offset: texto.length),
@@ -1241,7 +1235,7 @@ void dispose() {
                                     onChanged: onTelChanged,
                                     decoration: InputDecoration(
                                       labelText: "Teléfono (OBLIGATORIO)",
-                                      hintText: "+18095551234",
+                                      hintText: "+1 809-555-1234",
                                       suffixIcon: loadingSearch
                                           ? const Padding(
                                               padding: EdgeInsets.all(12),

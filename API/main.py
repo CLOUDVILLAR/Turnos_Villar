@@ -18,6 +18,7 @@ from typing import Optional as Opt
 from routers.odoo_customers import router as odoo_router
 from dotenv import load_dotenv
 from routers.odoo_customers import router as odoo_customers_router
+from routers.odoo_recetas import router as odoo_recetas_router
 load_dotenv()
 
 app = FastAPI()
@@ -25,6 +26,7 @@ app = FastAPI()
 # RUTAS AÑADIDAS
 app.include_router(odoo_router)
 app.include_router(odoo_customers_router)
+app.include_router(odoo_recetas_router)
 
 app.add_middleware(
     CORSMiddleware,

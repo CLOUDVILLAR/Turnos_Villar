@@ -187,6 +187,69 @@ async def buscar_clientes(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/clientes/buscar-por-telefono", response_model=List[PartnerOut])
+async def buscar_clientes_por_telefono(
+    telefono: str = Query(..., min_length=4),
+):
+    """
+    Busca clientes por telefono ignorando formato (compara solo digitos),
+    igual que /clientes/seleccionar-o-crear. Pensado para autocompletar
+    el nombre del cliente a partir del telefono al crear un turno.
+
+    Solo usa 2 terminos de busqueda (en paralelo, no secuencial):
+    - los ultimos 4 digitos: casi siempre quedan contiguos sin separadores
+      sin importar el formato guardado (+1 809-989-3267, (809) 989-3267, etc.)
+    - los digitos completos: cubre el caso de telefonos guardados sin formato.
+    Menos terminos y en paralelo = respuesta en cientos de ms en vez de ~2s.
+    """
+    try:
+        raw_tel = telefono.strip()
+        d = phone_digits(raw_tel)
+        if not d:
+            return []
+
+        last4 = d[-4:] if len(d) >= 4 else None
+        search_terms = unique_terms([last4, d])
+
+        results: List[List[dict]] = [[] for _ in search_terms]
+
+        async def run_term(i: int, term: str):
+            # Cada tarea usa su PROPIO OdooClient (con su propia conexion XML-RPC).
+            # Compartir un unico cliente entre hilos concurrentes causaba
+            # "CannotSendRequest: Request-sent" porque http.client.HTTPConnection
+            # no soporta pedidos superpuestos sobre la misma conexion.
+            term_client = OdooClient()
+            results[i] = await anyio.to_thread.run_sync(term_client.search_partners, term, 100)
+
+        async with anyio.create_task_group() as tg:
+            for i, term in enumerate(search_terms):
+                tg.start_soon(run_term, i, term)
+
+        by_id = {}
+        for candidates in results:
+            for p in candidates:
+                pid = p.get("id")
+                if pid is not None:
+                    by_id[pid] = p
+
+        matches = []
+        for p in by_id.values():
+            p_phone_d = phone_digits(p.get("phone"))
+            p_mobile_d = phone_digits(p.get("mobile"))
+            if p_phone_d == d or p_mobile_d == d:
+                p = dict(p)
+                if p.get("phone"):
+                    p["phone"] = phone_pretty_for_ui(p["phone"])
+                if p.get("mobile"):
+                    p["mobile"] = phone_pretty_for_ui(p["mobile"])
+                matches.append(p)
+
+        return matches
+    except Exception as e:
+        log.exception("Odoo buscar_clientes_por_telefono failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/clientes/{partner_id}/telefono", response_model=PartnerOut)
 async def actualizar_telefono(partner_id: int, data: UpdateTelefonoIn):
     """

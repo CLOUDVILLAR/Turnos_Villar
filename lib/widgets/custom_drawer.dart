@@ -5,6 +5,7 @@ import '../screens/empleado_screen.dart';
 import '../screens/doctor_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/estadisticas_screen.dart';
+import '../screens/anexar_receta_screen.dart';
 
 
 class CustomDrawer extends StatelessWidget {
@@ -206,6 +207,27 @@ class CustomDrawer extends StatelessWidget {
                         }
                     },
                     ),
+                  _item(
+                    context: context,
+                    selected: currentRoute == 'anexar_receta',
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Anexar receta',
+                    onTap: () {
+                      if (currentRoute == 'anexar_receta') {
+                        Navigator.pop(context);
+                      } else {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AnexarRecetaScreen(
+                              sucursalId: sucursalId,
+                              sucursalNombre: sucursalNombre,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
                   const SizedBox(height: 10),
                   const Divider(height: 1),
 

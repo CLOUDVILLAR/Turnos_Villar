@@ -203,8 +203,6 @@ async def buscar_clientes_por_telefono(
     Menos terminos y en paralelo = respuesta en cientos de ms en vez de ~2s.
     """
     try:
-        client = OdooClient()
-
         raw_tel = telefono.strip()
         d = phone_digits(raw_tel)
         if not d:
@@ -216,7 +214,12 @@ async def buscar_clientes_por_telefono(
         results: List[List[dict]] = [[] for _ in search_terms]
 
         async def run_term(i: int, term: str):
-            results[i] = await anyio.to_thread.run_sync(client.search_partners, term, 25)
+            # Cada tarea usa su PROPIO OdooClient (con su propia conexion XML-RPC).
+            # Compartir un unico cliente entre hilos concurrentes causaba
+            # "CannotSendRequest: Request-sent" porque http.client.HTTPConnection
+            # no soporta pedidos superpuestos sobre la misma conexion.
+            term_client = OdooClient()
+            results[i] = await anyio.to_thread.run_sync(term_client.search_partners, term, 100)
 
         async with anyio.create_task_group() as tg:
             for i, term in enumerate(search_terms):

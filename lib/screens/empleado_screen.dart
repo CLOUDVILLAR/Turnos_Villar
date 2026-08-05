@@ -400,19 +400,16 @@ Future<List<Map<String, dynamic>>> _buscarClientesPorTelefono(String telefono) a
 
 String _soloDigitos(String input) => input.replaceAll(RegExp(r'\D+'), '');
 
-/// Un teléfono se considera "completo" (listo para buscar/enviar) cuando:
-/// - empieza en 1 (Rep. Dominicana / USA / Canadá, prefijo NANP): 1 + 10 dígitos.
-/// - cualquier otro país: al menos 8 dígitos (mínimo razonable genérico).
+/// Un teléfono se considera "completo" (listo para buscar/enviar) con un
+/// mínimo genérico de dígitos, sin asumir el patrón de ningún país en particular.
 bool telefonoEstaCompleto(String input) {
   final d = _soloDigitos(input);
-  if (d.isEmpty) return false;
-  if (d.startsWith('1')) return d.length == 11;
   return d.length >= 8;
 }
 
-/// Formatea en vivo el teléfono como `+código XXX-XXX-XXXX`.
-/// Para números que empiezan en 1 (Rep. Dominicana, USA, Canadá) siempre usa
-/// el patrón +1 XXX-XXX-XXXX; para el resto agrupa en bloques de 3 dígitos.
+/// Formatea en vivo el teléfono como `+` seguido de los dígitos agrupados
+/// de a 3 con guiones (ej. +1-809-555-1234). No asume ni fuerza el patrón
+/// de ningún país específico: solo garantiza el "+" inicial y los guiones.
 class _PhoneInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -427,30 +424,9 @@ class _PhoneInputFormatter extends TextInputFormatter {
     }
 
     final buf = StringBuffer('+');
-
-    if (digits.startsWith('1')) {
-      buf.write('1');
-      final resto = digits.substring(1);
-      if (resto.isNotEmpty) {
-        buf.write(' ');
-        buf.write(resto.substring(0, min(3, resto.length)));
-      }
-      if (resto.length > 3) {
-        buf.write('-');
-        buf.write(resto.substring(3, min(6, resto.length)));
-      }
-      if (resto.length > 6) {
-        buf.write('-');
-        buf.write(resto.substring(6, min(10, resto.length)));
-      }
-    } else {
-      final codigo = digits.substring(0, min(3, digits.length));
-      buf.write(codigo);
-      final resto = digits.length > 3 ? digits.substring(3) : '';
-      for (var i = 0; i < resto.length; i += 3) {
-        buf.write('-');
-        buf.write(resto.substring(i, min(i + 3, resto.length)));
-      }
+    for (var i = 0; i < digits.length; i += 3) {
+      if (i > 0) buf.write('-');
+      buf.write(digits.substring(i, min(i + 3, digits.length)));
     }
 
     final texto = buf.toString();
@@ -1114,8 +1090,9 @@ void dispose() {
     final edadCtrl = TextEditingController();
 
     Map<String, dynamic>? selectedCliente;
-    List<Map<String, dynamic>> sugerencias = [];
+    List<Map<String, dynamic>> multiMatches = [];
     bool loadingSearch = false;
+    bool hasSearched = false;
     bool isSubmitting = false;
 
     Timer? localDebounce;
@@ -1142,59 +1119,66 @@ void dispose() {
               child: StatefulBuilder(
                 builder: (context, setLocal) {
                   void onTelChanged(String value) {
-                    setLocal(() => selectedCliente = null);
-
                     localDebounce?.cancel();
                     final digits = _soloDigitos(value);
 
+                    setLocal(() {
+                      selectedCliente = null;
+                      multiMatches = [];
+                      hasSearched = false;
+                      nombreCtrl.clear();
+                    });
+
                     if (digits.length < 7) {
-                      safeSetLocal(setLocal, () {
-                        sugerencias = [];
-                        loadingSearch = false;
-                      });
+                      safeSetLocal(setLocal, () => loadingSearch = false);
                       return;
                     }
 
+                    // Se marca "buscando" de inmediato (antes del debounce) para
+                    // que nunca se llegue a mostrar "no existe" antes de buscar de verdad.
+                    safeSetLocal(setLocal, () => loadingSearch = true);
+
                     localDebounce = Timer(const Duration(milliseconds: 350), () async {
-                      safeSetLocal(setLocal, () => loadingSearch = true);
                       final res = await _buscarClientesPorTelefono(value);
                       safeSetLocal(setLocal, () {
-                        sugerencias = res;
                         loadingSearch = false;
+                        hasSearched = true;
+                        if (res.length == 1) {
+                          selectedCliente = res.first;
+                          nombreCtrl.text = (res.first['name'] ?? '').toString();
+                          multiMatches = [];
+                        } else if (res.length > 1) {
+                          multiMatches = res;
+                          selectedCliente = null;
+                        } else {
+                          selectedCliente = null;
+                          multiMatches = [];
+                        }
                       });
                     });
                   }
 
-                  void selectCliente(Map<String, dynamic> c) {
+                  void selectFromMulti(Map<String, dynamic> c) {
                     setLocal(() {
                       selectedCliente = c;
                       nombreCtrl.text = (c['name'] ?? '').toString();
-
-                      final tel = ((c['phone'] ?? c['mobile']) ?? '').toString();
-                      if (tel.trim().isNotEmpty) telCtrl.text = tel;
-
-                      sugerencias = [];
-                      loadingSearch = false;
-                    });
-                  }
-
-                  void clearSelected() {
-                    safeSetLocal(setLocal, () {
-                      selectedCliente = null;
-                      nombreCtrl.clear();
-                      edadCtrl.clear();
-                      telCtrl.clear();
-                      sugerencias = [];
-                      loadingSearch = false;
+                      multiMatches = [];
                     });
                   }
 
                   final telefonoCompleto = telefonoEstaCompleto(telCtrl.text);
-                  final nombreValido =
-                      selectedCliente != null || hasNombreYApellido(nombreCtrl.text);
+                  final mostrarComoExistente = selectedCliente != null;
+                  final mostrarComoNuevo = hasSearched &&
+                      telefonoCompleto &&
+                      selectedCliente == null &&
+                      multiMatches.isEmpty;
+                  final mostrarEdad = mostrarComoExistente || mostrarComoNuevo;
+
+                  final nombreValido = mostrarComoExistente ||
+                      (mostrarComoNuevo && hasNombreYApellido(nombreCtrl.text));
                   final edadValida = (int.tryParse(edadCtrl.text.trim()) ?? 0) > 0;
                   final puedeAgregar =
-                      telefonoCompleto && nombreValido && edadValida && !isSubmitting;
+                      mostrarEdad && nombreValido && edadValida && !isSubmitting;
 
                   final screenW = MediaQuery.of(context).size.width;
                   final maxW = screenW > 560 ? 560.0 : screenW - 32;
@@ -1245,10 +1229,10 @@ void dispose() {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // -------- TELÉFONO (primero: es la clave de búsqueda) --------
+                                  // -------- TELÉFONO (único campo al abrir: es la clave de búsqueda) --------
                                   TextField(
                                     controller: telCtrl,
-                                    enabled: selectedCliente == null,
+                                    autofocus: true,
                                     keyboardType: TextInputType.phone,
                                     inputFormatters: [
                                       _PhoneInputFormatter(),
@@ -1257,7 +1241,7 @@ void dispose() {
                                     onChanged: onTelChanged,
                                     decoration: InputDecoration(
                                       labelText: "Teléfono (OBLIGATORIO)",
-                                      hintText: "+1 809-000-0000",
+                                      hintText: "+18095551234",
                                       suffixIcon: loadingSearch
                                           ? const Padding(
                                               padding: EdgeInsets.all(12),
@@ -1267,7 +1251,7 @@ void dispose() {
                                                 child: CircularProgressIndicator(strokeWidth: 2),
                                               ),
                                             )
-                                          : (selectedCliente != null
+                                          : (mostrarComoExistente
                                               ? const Icon(Icons.check_circle, color: brandRed)
                                               : null),
                                       focusedBorder: OutlineInputBorder(
@@ -1281,7 +1265,26 @@ void dispose() {
                                     ),
                                   ),
 
-                                  if (selectedCliente == null && sugerencias.isNotEmpty)
+                                  if (loadingSearch)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 10),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            "Buscando cliente…",
+                                            style: TextStyle(color: Colors.black54, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  if (!loadingSearch && multiMatches.isNotEmpty)
                                     Container(
                                       margin: const EdgeInsets.only(top: 8),
                                       decoration: BoxDecoration(
@@ -1289,14 +1292,14 @@ void dispose() {
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: SizedBox(
-                                        height: 220,
+                                        height: 180,
                                         child: ListView.builder(
                                           padding: EdgeInsets.zero,
-                                          itemCount: sugerencias.length,
+                                          itemCount: multiMatches.length,
                                           shrinkWrap: true,
                                           physics: const ClampingScrollPhysics(),
                                           itemBuilder: (_, i) {
-                                            final c = sugerencias[i];
+                                            final c = multiMatches[i];
                                             final name = (c['name'] ?? '').toString();
                                             final sub = ((c['phone'] ?? c['mobile']) ?? '').toString();
                                             return ListTile(
@@ -1308,85 +1311,86 @@ void dispose() {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                               trailing: const Icon(Icons.chevron_right),
-                                              onTap: () => selectCliente(c),
+                                              onTap: () => selectFromMulti(c),
                                             );
                                           },
                                         ),
                                       ),
                                     ),
 
-                                  if (selectedCliente == null &&
-                                      !loadingSearch &&
-                                      sugerencias.isEmpty &&
-                                      telefonoCompleto)
-                                    const Padding(
-                                      padding: EdgeInsets.only(top: 8),
-                                      child: Text(
-                                        "No existe ningún cliente con este teléfono. Se creará uno nuevo.",
-                                        style: TextStyle(color: Colors.black54, fontSize: 12),
+                                  if (mostrarComoExistente) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: brandRed.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: brandRed.withOpacity(0.25)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.check_circle, color: brandRed),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              nombreCtrl.text,
+                                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
+                                  ],
 
-                                  if (selectedCliente != null)
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: clearSelected,
-                                        style: TextButton.styleFrom(foregroundColor: brandRed),
-                                        icon: const Icon(Icons.close, size: 18),
-                                        label: const Text("Quitar selección"),
+                                  if (mostrarComoNuevo) ...[
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      "No existe ningún cliente con este teléfono. Se creará uno nuevo.",
+                                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: nombreCtrl,
+                                      inputFormatters: [nameFormatter],
+                                      onChanged: (_) => setLocal(() {}),
+                                      decoration: InputDecoration(
+                                        labelText: "Nombre y Apellido (Obligatorio poner el apellido)",
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          borderSide: const BorderSide(color: brandRed, width: 2),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          borderSide: const BorderSide(color: Colors.black12),
+                                        ),
                                       ),
                                     ),
+                                  ],
 
-                                  const SizedBox(height: 12),
-
-                                  // -------- NOMBRE (solo editable si no hay cliente seleccionado) --------
-                                  TextField(
-                                    controller: nombreCtrl,
-                                    inputFormatters: [nameFormatter],
-                                    enabled: selectedCliente == null,
-                                    onChanged: (_) => setLocal(() {}),
-                                    decoration: InputDecoration(
-                                      labelText: selectedCliente == null
-                                          ? "Nombre y Apellido (Obligatorio poner el apellido)"
-                                          : "Nombre (autocompletado)",
-                                      suffixIcon: selectedCliente != null
-                                          ? const Icon(Icons.check_circle, color: brandRed)
-                                          : null,
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: const BorderSide(color: brandRed, width: 2),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: const BorderSide(color: Colors.black12),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  TextField(
-                                    controller: edadCtrl,
-                                    enabled: true,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      LengthLimitingTextInputFormatter(3),
-                                    ],
-                                    onChanged: (_) => setLocal(() {}),
-                                    decoration: InputDecoration(
-                                      labelText: "Edad",
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: const BorderSide(color: brandRed, width: 2),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: const BorderSide(color: Colors.black12),
+                                  if (mostrarEdad) ...[
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: edadCtrl,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(3),
+                                      ],
+                                      onChanged: (_) => setLocal(() {}),
+                                      decoration: InputDecoration(
+                                        labelText: "Edad",
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          borderSide: const BorderSide(color: brandRed, width: 2),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          borderSide: const BorderSide(color: Colors.black12),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),

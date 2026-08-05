@@ -187,55 +187,6 @@ async def buscar_clientes(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/clientes/buscar-por-telefono", response_model=List[PartnerOut])
-async def buscar_clientes_por_telefono(
-    telefono: str = Query(..., min_length=4),
-):
-    """
-    Busca clientes por telefono ignorando formato (compara solo digitos),
-    igual que /clientes/seleccionar-o-crear. Pensado para autocompletar
-    el nombre del cliente a partir del telefono al crear un turno.
-    """
-    try:
-        client = OdooClient()
-
-        raw_tel = telefono.strip()
-        d = phone_digits(raw_tel)
-        if not d:
-            return []
-
-        last4 = d[-4:] if len(d) >= 4 else None
-        last7 = d[-7:] if len(d) >= 7 else None
-        last10 = d[-10:] if len(d) >= 10 else None
-
-        search_terms = unique_terms([raw_tel, d, f"+{d}", last10, last7, last4])
-
-        by_id = {}
-        for term in search_terms:
-            candidates = await anyio.to_thread.run_sync(client.search_partners, term, 25)
-            for p in candidates:
-                pid = p.get("id")
-                if pid is not None:
-                    by_id[pid] = p
-
-        matches = []
-        for p in by_id.values():
-            p_phone_d = phone_digits(p.get("phone"))
-            p_mobile_d = phone_digits(p.get("mobile"))
-            if p_phone_d == d or p_mobile_d == d:
-                p = dict(p)
-                if p.get("phone"):
-                    p["phone"] = phone_pretty_for_ui(p["phone"])
-                if p.get("mobile"):
-                    p["mobile"] = phone_pretty_for_ui(p["mobile"])
-                matches.append(p)
-
-        return matches
-    except Exception as e:
-        log.exception("Odoo buscar_clientes_por_telefono failed")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/clientes/{partner_id}/telefono", response_model=PartnerOut)
 async def actualizar_telefono(partner_id: int, data: UpdateTelefonoIn):
     """

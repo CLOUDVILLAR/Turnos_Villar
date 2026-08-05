@@ -29,14 +29,11 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   http: ^1.1.0
-  http_parser: ^4.0.2
   web_socket_channel: ^2.4.0 
   shared_preferences: ^2.2.3
   excel: ^4.0.6
   file_saver: ^0.2.14
   file_selector: ^1.0.3
-  image_picker: ^1.1.2
-  image: ^4.3.0
   flutter:
     sdk: flutter
   

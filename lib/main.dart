@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
-import 'utils/ip.dart';
-import 'widgets/staging_badge.dart';
 
 
 void main() {
@@ -23,19 +21,6 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
-      },
-      builder: (context, child) {
-        if (child == null || !isStaging) return child ?? const SizedBox.shrink();
-        return Stack(
-          children: [
-            child,
-            const Positioned(
-              bottom: 12,
-              right: 12,
-              child: SafeArea(child: StagingBadge()),
-            ),
-          ],
-        );
       },
     );
   }

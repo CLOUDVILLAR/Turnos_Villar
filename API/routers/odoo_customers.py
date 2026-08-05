@@ -195,6 +195,12 @@ async def buscar_clientes_por_telefono(
     Busca clientes por telefono ignorando formato (compara solo digitos),
     igual que /clientes/seleccionar-o-crear. Pensado para autocompletar
     el nombre del cliente a partir del telefono al crear un turno.
+
+    Solo usa 2 terminos de busqueda (en paralelo, no secuencial):
+    - los ultimos 4 digitos: casi siempre quedan contiguos sin separadores
+      sin importar el formato guardado (+1 809-989-3267, (809) 989-3267, etc.)
+    - los digitos completos: cubre el caso de telefonos guardados sin formato.
+    Menos terminos y en paralelo = respuesta en cientos de ms en vez de ~2s.
     """
     try:
         client = OdooClient()
@@ -205,14 +211,19 @@ async def buscar_clientes_por_telefono(
             return []
 
         last4 = d[-4:] if len(d) >= 4 else None
-        last7 = d[-7:] if len(d) >= 7 else None
-        last10 = d[-10:] if len(d) >= 10 else None
+        search_terms = unique_terms([last4, d])
 
-        search_terms = unique_terms([raw_tel, d, f"+{d}", last10, last7, last4])
+        results: List[List[dict]] = [[] for _ in search_terms]
+
+        async def run_term(i: int, term: str):
+            results[i] = await anyio.to_thread.run_sync(client.search_partners, term, 25)
+
+        async with anyio.create_task_group() as tg:
+            for i, term in enumerate(search_terms):
+                tg.start_soon(run_term, i, term)
 
         by_id = {}
-        for term in search_terms:
-            candidates = await anyio.to_thread.run_sync(client.search_partners, term, 25)
+        for candidates in results:
             for p in candidates:
                 pid = p.get("id")
                 if pid is not None:

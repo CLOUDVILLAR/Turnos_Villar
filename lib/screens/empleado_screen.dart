@@ -628,10 +628,6 @@ Future<void> _crearTurno(String nombre, int edad, String? tel, {bool requireApel
     _toast("El nombre es obligatorio.");
     return;
   }
-  if (RegExp(r'\d').hasMatch(cleanName)) {
-    _toast("El nombre no puede contener números.");
-    return;
-  }
   if (requireApellido && !hasNombreYApellido(cleanName)) {
     _toast("Debes ingresar nombre y apellido. (OBLIGATORIO PONER EL APELLIDO)");
     return;
@@ -1098,7 +1094,7 @@ void dispose() {
     }
 
     final nameFormatter = FilteringTextInputFormatter.allow(
-      RegExp(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ\s\-\']"),
+      RegExp(r"[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s\-\']"),
     );
 
     showDialog(

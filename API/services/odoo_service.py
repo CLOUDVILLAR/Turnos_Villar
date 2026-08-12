@@ -1,5 +1,6 @@
 # Archivo sugerido: API/services/odoo_service.py
 
+import datetime
 import os
 import xmlrpc.client
 from typing import Any, Dict, List, Optional
@@ -260,6 +261,58 @@ class OdooClient:
             raise RuntimeError(f"Odoo Fault buscando ordenes: {f.faultString}")
         except Exception as e:
             raise RuntimeError(f"Error buscando ordenes: {repr(e)}")
+
+    def get_order_partner_id(self, order_id: int) -> Optional[int]:
+        """
+        Devuelve el partner_id (cliente) asignado a la sale.order, o None
+        si la orden no tiene cliente asignado.
+        """
+        uid = self.authenticate()
+
+        try:
+            order = self.models.execute_kw(
+                self.db, uid, self.password,
+                "sale.order", "read",
+                [[int(order_id)]],
+                {"fields": ["partner_id"]}
+            )
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault leyendo cliente de la orden: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error leyendo cliente de la orden: {repr(e)}")
+
+        if not order:
+            return None
+
+        partner_id = order[0].get("partner_id")
+        if not partner_id:
+            return None
+
+        return int(partner_id[0])
+
+    def create_rx_vision(self, partner_id: int, datas_b64: str) -> int:
+        """
+        Crea un registro en el panel "RX vision" (modelo k_beauty.vision) del
+        cliente, con la foto de la receta como adjunto binario (campo 'exam').
+        """
+        uid = self.authenticate()
+
+        try:
+            vision_id = self.models.execute_kw(
+                self.db, uid, self.password,
+                "k_beauty.vision", "create",
+                [{
+                    "partner_id": int(partner_id),
+                    "date": datetime.date.today().isoformat(),
+                    "exam": datas_b64,
+                }]
+            )
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault creando RX vision: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error creando RX vision: {repr(e)}")
+
+        return int(vision_id)
 
     def attach_prescription(
         self,

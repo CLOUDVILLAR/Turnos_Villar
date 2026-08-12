@@ -72,7 +72,21 @@ async def anexar_receta(
             nota,
         )
 
-        return {"status": "ok", "attachment_id": attachment_id}
+        # Ademas de quedar en la orden, se sube al panel "RX vision" del
+        # cliente asignado a esa orden (si tiene uno asignado).
+        partner_id = await anyio.to_thread.run_sync(client.get_order_partner_id, order_id)
+
+        vision_id = None
+        if partner_id:
+            vision_id = await anyio.to_thread.run_sync(
+                client.create_rx_vision, partner_id, datas_b64
+            )
+
+        return {
+            "status": "ok",
+            "attachment_id": attachment_id,
+            "rx_vision_id": vision_id,
+        }
     except HTTPException:
         raise
     except Exception as e:

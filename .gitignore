@@ -58,3 +58,7 @@ API/utils/__pycache__/
 .env
 
 *.rar
+
+*.pem
+
+tokengit.txt

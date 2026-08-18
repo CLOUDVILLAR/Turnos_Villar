@@ -71,6 +71,8 @@ class OdooClient:
             p["phone"] = None
         if p.get("mobile") is False:
             p["mobile"] = None
+        if p.get("villar_id") is False:
+            p["villar_id"] = None
         return p
 
     def version(self) -> Dict[str, Any]:
@@ -117,7 +119,7 @@ class OdooClient:
                 ["mobile", "ilike", q],
         ]
 
-        fields = ["id", "name", "phone", "mobile"]
+        fields = ["id", "name", "phone", "mobile", "villar_id"]
 
         try:
             partners = self.models.execute_kw(
@@ -137,7 +139,7 @@ class OdooClient:
 
     def read_partner(self, partner_id: int) -> Optional[Dict[str, Any]]:
         uid = self.authenticate()
-        fields = ["id", "name", "phone", "mobile"]
+        fields = ["id", "name", "phone", "mobile", "villar_id"]
         try:
             res = self.models.execute_kw(
                 self.db, uid, self.password,
@@ -359,6 +361,22 @@ class OdooClient:
             raise RuntimeError(f"Error publicando en el chatter: {repr(e)}")
 
         return int(attachment_id)
+
+    def escribir_villar_id(self, partner_id: int, villar_id: str) -> None:
+        """Graba el villar_id (identidad central del ecosistema Villar) en el
+        campo personalizado res.partner.villar_id. Mismo patron que ya usa
+        KBeauty (servicios/servicio_odoo.py: escribir_villar_id_clientes)."""
+        uid = self.authenticate()
+        try:
+            self.models.execute_kw(
+                self.db, uid, self.password,
+                "res.partner", "write",
+                [[int(partner_id)], {"villar_id": str(villar_id)}]
+            )
+        except xmlrpc.client.Fault as f:
+            raise RuntimeError(f"Odoo Fault escribiendo villar_id: {f.faultString}")
+        except Exception as e:
+            raise RuntimeError(f"Error escribiendo villar_id: {repr(e)}")
 
     def update_partner_phone(self, partner_id: int, telefono: Optional[str]) -> Dict[str, Any]:
         uid = self.authenticate()

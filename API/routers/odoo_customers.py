@@ -7,9 +7,38 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.odoo_service import OdooClient
+from services.villar_do_service import resolver_cliente_villar_do
 
 router = APIRouter(prefix="/odoo", tags=["odoo"])
 log = logging.getLogger("uvicorn.error")
+
+
+async def _sincronizar_villar_id(client: OdooClient, partner: dict, nombre: str, apellido: str, telefono: Optional[str]) -> Optional[str]:
+    """
+    Resuelve/crea el villar_id (identidad central del ecosistema Villar, sin
+    contrasena) para este cliente y lo graba en res.partner.villar_id.
+
+    Best-effort: nunca lanza excepcion -- no debe bloquear el alta del turno
+    si Villar ID esta caido o mal configurado. Si el partner ya tiene un
+    villar_id cargado, no vuelve a llamar a Villar ID.
+    """
+    if partner.get("villar_id"):
+        return partner["villar_id"]
+
+    try:
+        resultado = await anyio.to_thread.run_sync(
+            resolver_cliente_villar_do, nombre, apellido, telefono
+        )
+        villar_id = resultado.get("villar_id")
+        if not villar_id:
+            log.warning("Villar ID no devolvio villar_id: %s", resultado)
+            return None
+
+        await anyio.to_thread.run_sync(client.escribir_villar_id, partner["id"], villar_id)
+        return villar_id
+    except Exception as e:
+        log.warning("No se pudo sincronizar villar_id para partner %s: %r", partner.get("id"), e)
+        return None
 
 
 # =======================
@@ -364,6 +393,9 @@ async def seleccionar_o_crear(data: PartnerCreateIn):
                 if not best_partner.get("phone") and raw_match:
                     best_partner["phone"] = phone_pretty_for_ui(raw_match)
 
+                villar_id = await _sincronizar_villar_id(client, best_partner, nombre, apellido, raw_tel)
+                best_partner["villar_id"] = villar_id
+
                 return {
                     "status": "existing_phone",
                     "created": False,
@@ -431,6 +463,9 @@ async def seleccionar_o_crear(data: PartnerCreateIn):
         )
 
         created = partner_for_ui(created)
+
+        villar_id = await _sincronizar_villar_id(client, created, nombre, apellido, raw_tel)
+        created["villar_id"] = villar_id
 
         return {
             "status": "created",

@@ -9,7 +9,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import re
 from services.odoo_service import OdooClient
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from fastapi import Query
@@ -256,10 +256,10 @@ def _phone_digits(raw: Optional[str]) -> Optional[str]:
     return d or None
 
 
-async def _get_odoo_name_by_phone(telefono: Optional[str]) -> Optional[str]:
+async def _buscar_partner_por_telefono(telefono: Optional[str]) -> Optional[dict]:
     """
-    Busca en Odoo por teléfono (ignorando formato) y devuelve el partner.name.
-    Si no encuentra, devuelve None.
+    Busca en Odoo por teléfono (ignorando formato) y devuelve el partner
+    completo (id, name, phone, mobile, villar_id) si lo encuentra.
     """
     d = _phone_digits(telefono)
     if not d:
@@ -291,11 +291,38 @@ async def _get_odoo_name_by_phone(telefono: Optional[str]) -> Optional[str]:
         candidates = await anyio.to_thread.run_sync(client.search_partners, t, 25)
         for p in candidates:
             if _phone_digits(p.get("phone")) == d or _phone_digits(p.get("mobile")) == d:
-                name = (p.get("name") or "").strip()
-                if name:
-                    return name
+                return p
 
     return None
+
+
+async def _sincronizar_villar_id_turno(partner: Optional[dict], nombre: str, telefono: Optional[str]) -> None:
+    """
+    Best-effort: si el cliente encontrado en Odoo para este turno no tiene
+    villar_id todavia, se lo asigna llamando a Villar ID y lo graba en
+    res.partner.villar_id.
+
+    Este es el UNICO punto donde se sincroniza el villar_id para clientes
+    que Flutter ya encontro por telefono exacto (no pasan por
+    /odoo/clientes/seleccionar-o-crear, que es donde se sincroniza para
+    clientes nuevos o encontrados desde ese otro endpoint). Se corre en
+    background (BackgroundTasks) para no sumarle latencia a la creacion
+    del turno. Nunca lanza excepcion.
+    """
+    if not partner or partner.get("villar_id"):
+        return
+    try:
+        from services.villar_do_service import resolver_cliente_villar_do
+        resultado = await anyio.to_thread.run_sync(
+            resolver_cliente_villar_do, nombre, "", telefono
+        )
+        villar_id = resultado.get("villar_id")
+        if not villar_id:
+            return
+        client = OdooClient()
+        await anyio.to_thread.run_sync(client.escribir_villar_id, partner["id"], villar_id)
+    except Exception:
+        pass
 
 
 # --------- Endpoints HTTP ---------
@@ -383,10 +410,11 @@ def db_turno_activo_existente(
 
 
 @app.post("/crear-turno")
-async def crear_turno(turno: TurnoCreate):
+async def crear_turno(turno: TurnoCreate, background_tasks: BackgroundTasks):
     try:
         # 1) Normalizar nombre usando Odoo si existe
-        odoo_name = await _get_odoo_name_by_phone(turno.telefono)
+        partner = await _buscar_partner_por_telefono(turno.telefono)
+        odoo_name = (partner.get("name") or "").strip() if partner else None
         nombre_final = (odoo_name or turno.nombre).strip()
 
         # 2) Crear turno de forma ATÓMICA (sin race conditions)
@@ -408,6 +436,11 @@ async def crear_turno(turno: TurnoCreate):
         # 4) Broadcast del estado actual
         payload = await build_turno_actual_event(turno.sucursal_id)
         await manager.broadcast(turno.sucursal_id, payload)
+
+        # 5) Asegurar villar_id en segundo plano (no le suma latencia al turno).
+        # Cubre el caso de un cliente que Flutter ya encontro por telefono
+        # exacto y por lo tanto nunca paso por /odoo/clientes/seleccionar-o-crear.
+        background_tasks.add_task(_sincronizar_villar_id_turno, partner, nombre_final, turno.telefono)
 
         return {
             "id": new_id,
